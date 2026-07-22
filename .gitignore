@@ -12,3 +12,6 @@ frontend/.env.local
 
 # OS
 .DS_Store
+legislation_demo.csv
+caselaw_demo.csv
+.env
