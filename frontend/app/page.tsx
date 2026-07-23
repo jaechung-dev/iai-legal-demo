@@ -27,9 +27,14 @@ export default function TimelinePage() {
     <>
       <Nav active="timeline" />
       <main className="max-w-5xl mx-auto px-6 py-8">
-        <p className="text-sm text-slate-500 mb-6">
-          {events.length} events · R v Nguyen · NSW District Court 2025
-        </p>
+        <div className="mb-6">
+          <h1 className="text-xl font-bold text-slate-900">Case Timeline</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            <span className="font-medium text-slate-700">R v Nguyen</span>
+            {' · '}NSW District Court 2025
+            {' · '}{events.length} events
+          </p>
+        </div>
         <TimelineClient events={events} />
       </main>
     </>

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.0.28:20000'
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
 
 const SCOPES = [
   { id: 'search',   label: 'Search',   desc: 'Semantic search over NSW legislation and caselaw' },

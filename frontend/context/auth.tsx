@@ -13,10 +13,14 @@ type AuthCtx = {
 
 const AuthContext = createContext<AuthCtx | null>(null)
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.0.28:20000'
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
 
-function safeStorage() {
-  try { return typeof localStorage.getItem === 'function' ? localStorage : null }
+function safeStorage(): Storage | null {
+  try {
+    if (typeof window === 'undefined') return null
+    localStorage.getItem('__probe__')  // throws if env localStorage is broken
+    return localStorage
+  }
   catch { return null }
 }
 

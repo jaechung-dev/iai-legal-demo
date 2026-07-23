@@ -9,9 +9,16 @@ __pycache__/
 frontend/node_modules/
 frontend/.next/
 frontend/.env.local
+frontend/out/
 
 # OS
 .DS_Store
 legislation_demo.csv
 caselaw_demo.csv
 .env
+lambda.zip
+lambda_pkg/
+terraform/terraform.tfvars
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate*

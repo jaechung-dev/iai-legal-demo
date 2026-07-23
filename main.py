@@ -41,9 +41,17 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
 CHAT_MODEL  = os.getenv("CHAT_MODEL",  "gpt-4o-mini")
 
 # ── embeddings / LLM ─────────────────────────────────────────────────────────
+# Switch provider by setting CHAT_MODEL in .env:
+#   gpt-4o-mini          → OpenAI  (cheap, good for demos)
+#   claude-haiku-4-5     → Anthropic
 
 embedder = OpenAIEmbeddings(model=EMBED_MODEL)
-llm      = ChatOpenAI(model=CHAT_MODEL, temperature=0.1, streaming=True)
+
+if CHAT_MODEL.startswith("claude-"):
+    from langchain_anthropic import ChatAnthropic
+    llm = ChatAnthropic(model=CHAT_MODEL, temperature=0.1, max_tokens=2048)
+else:
+    llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.1, streaming=True)
 
 # ── retrievers ────────────────────────────────────────────────────────────────
 
@@ -433,3 +441,7 @@ async def chat(req: ChatRequest):
             "X-Accel-Buffering": "no",
         }
     )
+
+# Lambda handler
+from mangum import Mangum
+handler = Mangum(app, lifespan='off')
