@@ -8,6 +8,8 @@ type AuthCtx = {
   user: User | null
   token: string | null
   login: (username: string, password: string) => Promise<void>
+  register: (name: string, email: string, password: string) => Promise<void>
+  loginWithToken: (token: string) => void
   logout: () => void
 }
 
@@ -18,7 +20,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
 function safeStorage(): Storage | null {
   try {
     if (typeof window === 'undefined') return null
-    localStorage.getItem('__probe__')  // throws if env localStorage is broken
+    localStorage.getItem('__probe__')
     return localStorage
   }
   catch { return null }
@@ -33,6 +35,11 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
+function decodeToken(token: string): User {
+  const payload = JSON.parse(atob(token.split('.')[1]))
+  return { username: payload.sub, name: payload.name, role: payload.role }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]   = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -41,13 +48,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const ls = safeStorage()
     if (!ls) return
     const t = ls.getItem('iai_token')
-    const u = ls.getItem('iai_user')
-    if (t && u && !isTokenExpired(t)) {
-      setToken(t); setUser(JSON.parse(u))
+    if (t && !isTokenExpired(t)) {
+      setToken(t)
+      setUser(decodeToken(t))
     } else {
       ls.removeItem('iai_token')
-      ls.removeItem('iai_user')
     }
+  }, [])
+
+  const _storeToken = useCallback((t: string) => {
+    safeStorage()?.setItem('iai_token', t)
+    setToken(t)
+    setUser(decodeToken(t))
   }, [])
 
   const login = useCallback(async (username: string, password: string) => {
@@ -61,21 +73,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(err.detail || 'Login failed')
     }
     const data = await r.json()
-    safeStorage()?.setItem('iai_token', data.access_token)
-    safeStorage()?.setItem('iai_user', JSON.stringify(data.user))
-    setToken(data.access_token)
-    setUser(data.user)
-  }, [])
+    _storeToken(data.access_token)
+  }, [_storeToken])
+
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    const r = await fetch(`${API}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    })
+    if (!r.ok) {
+      const err = await r.json()
+      throw new Error(err.detail || 'Registration failed')
+    }
+    const data = await r.json()
+    _storeToken(data.access_token)
+  }, [_storeToken])
+
+  const loginWithToken = useCallback((t: string) => {
+    _storeToken(t)
+  }, [_storeToken])
 
   const logout = useCallback(() => {
     safeStorage()?.removeItem('iai_token')
-    safeStorage()?.removeItem('iai_user')
     setToken(null)
     setUser(null)
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, register, loginWithToken, logout }}>
       {children}
     </AuthContext.Provider>
   )

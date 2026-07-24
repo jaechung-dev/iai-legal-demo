@@ -11,7 +11,7 @@ test('mode toggles between Search and Ask', async ({ page }) => {
   const searchInput = page.getByPlaceholder(/search nsw legislation/i)
   await expect(searchInput).toBeVisible()
 
-  await page.getByRole('button', { name: /💬 ask/i }).click()
+  await page.getByRole('button', { name: /^ask$/i }).click()
   await expect(page.getByPlaceholder(/ask a legal question/i)).toBeVisible()
 })
 

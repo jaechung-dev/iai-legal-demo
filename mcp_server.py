@@ -1,18 +1,52 @@
 """
 Legal RAG MCP Server — port 20002
-Tools: search, ask, fetch, collections
-Auth: JWT Bearer token (get one from /auth/token on port 20003)
+
+Auth: Bearer JWT issued by probonoai.com.au /auth/login.
+      Every request must carry:  Authorization: Bearer <jwt>
+      Tokens are validated against the same JWT_SECRET as the main API.
 """
 import os, json, requests
-from typing import Any
+from dotenv import load_dotenv
+load_dotenv()
 from mcp.server.fastmcp import FastMCP
-from jose import jwt, JWTError
-from starlette.requests import Request
+from jose import jwt as jose_jwt, JWTError
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
-SECRET_KEY = os.getenv("JWT_SECRET", "change-me-in-production-use-long-random-string")
-ALGORITHM  = "HS256"
+JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production-use-long-random-string")
+JWT_ALG    = "HS256"
 RAG_URL    = os.getenv("RAG_URL", "http://127.0.0.1:20000")
+
+# Paths that don't require auth (MCP negotiation)
+_PUBLIC = {"/"}
+
+
+class JWTAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in _PUBLIC:
+            return await call_next(request)
+
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return JSONResponse(
+                {"error": "Missing Authorization header. Login at probonoai.com.au to get a token."},
+                status_code=401,
+            )
+        token = auth[len("Bearer "):]
+        try:
+            claims = jose_jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        except JWTError:
+            return JSONResponse({"error": "Invalid or expired token."}, status_code=401)
+
+        scopes = claims.get("scopes", [])
+        if not scopes:
+            return JSONResponse({"error": "Token has no scopes."}, status_code=403)
+
+        request.state.claims = claims
+        return await call_next(request)
+
 
 mcp = FastMCP(
     "Legal RAG",
@@ -20,43 +54,18 @@ mcp = FastMCP(
 )
 
 
-# ── auth helper ───────────────────────────────────────────────────────────────
-
-DEFAULT_JWT = os.getenv("MCP_DEFAULT_JWT", "")
-
-def get_claims(token: str) -> dict:
-    t = token or DEFAULT_JWT
-    if not t:
-        raise PermissionError("No JWT token provided")
-    try:
-        return jwt.decode(t, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError as e:
-        raise PermissionError(f"Invalid token: {e}")
-
-def check_tool(claims: dict, tool: str):
-    if tool not in claims.get("tools", []):
-        raise PermissionError(f"Token does not permit tool: {tool}")
-
-
-# ── tools ─────────────────────────────────────────────────────────────────────
-
 @mcp.tool()
-def search(query: str, source: str = "legislation", k: int = 5, jwt_token: str = "") -> str:
+def search(query: str, source: str = "legislation", k: int = 5) -> str:
     """
     Search NSW legislation and caselaw semantically.
     source: 'legislation' | 'caselaw' | 'both' | 'case_events'
     Returns top-k relevant chunks with citations.
     """
-    claims = get_claims(jwt_token)
-    check_tool(claims, "search")
-
     r = requests.post(f"{RAG_URL}/search", json={
-        "query": query, "source": source,
-        "jurisdiction": "NSW", "k": k
+        "query": query, "source": source, "jurisdiction": "NSW", "k": k,
     }, timeout=30)
     r.raise_for_status()
     results = r.json()["results"]
-
     output = f"Search: '{query}' ({source}, {len(results)} results)\n\n"
     for i, res in enumerate(results, 1):
         citation = res["metadata"].get("citation") or res["metadata"].get("case_name", "")
@@ -66,23 +75,17 @@ def search(query: str, source: str = "legislation", k: int = 5, jwt_token: str =
 
 
 @mcp.tool()
-def ask(question: str, source: str = "both", k: int = 5, jwt_token: str = "") -> str:
+def ask(question: str, source: str = "both", k: int = 5) -> str:
     """
     Ask a legal question in plain English. Returns an answer backed by NSW legislation and caselaw.
     source: 'legislation' | 'caselaw' | 'both'
     """
-    claims = get_claims(jwt_token)
-    check_tool(claims, "ask")
-
     r = requests.post(f"{RAG_URL}/chat", json={
-        "question": question,
-        "messages": [],
-        "k": k,
+        "question": question, "messages": [], "k": k,
     }, timeout=120, stream=True)
     r.raise_for_status()
 
-    answer  = ""
-    sources = []
+    answer, sources = "", []
     for line in r.iter_lines():
         if not line:
             continue
@@ -105,14 +108,11 @@ def ask(question: str, source: str = "both", k: int = 5, jwt_token: str = "") ->
 
 
 @mcp.tool()
-def fetch(case_id: str, jwt_token: str = "") -> str:
+def fetch(case_id: str) -> str:
     """
     Fetch all timeline events for a case.
     case_id: e.g. 'nguyen'
     """
-    claims = get_claims(jwt_token)
-    check_tool(claims, "fetch")
-
     r = requests.get(f"{RAG_URL}/case/{case_id}/timeline", timeout=15)
     if r.status_code == 404:
         return f"Case '{case_id}' not found."
@@ -125,32 +125,27 @@ def fetch(case_id: str, jwt_token: str = "") -> str:
 
 
 @mcp.tool()
-def collections(jwt_token: str = "") -> str:
-    """
-    List available data collections and their sizes.
-    """
-    claims = get_claims(jwt_token)
-    check_tool(claims, "collections")
-
+def collections() -> str:
+    """List available data collections and their sizes."""
     r = requests.get(f"{RAG_URL}/health", timeout=10)
     r.raise_for_status()
-
     return (
         "Available collections:\n"
-        "- legislation  : 114,920 NSW legislation chunks (OALC corpus, BGE-M3 embedded)\n"
+        "- legislation  : 114,920 NSW legislation chunks (OALC corpus, text-embedding-3-small)\n"
         "- caselaw      : 66,547 NSW caselaw paragraph chunks\n"
         "- case_events  : Demo case event timeline (R v Nguyen)\n"
         f"Model: {r.json().get('model', 'unknown')}"
     )
 
 
-# expose as ASGI app for uvicorn
 _mcp_app = mcp.streamable_http_app()
+
+# Middleware applied outer-to-inner: CORS → JWT → MCP
 app = CORSMiddleware(
-    _mcp_app,
+    JWTAuthMiddleware(_mcp_app),
     allow_origins=["*"],
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "Authorization"],
     expose_headers=["mcp-session-id"],
 )
 

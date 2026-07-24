@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test('timeline page loads with event count', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText(/events · R v Nguyen/)).toBeVisible({ timeout: 10000 })
+  await expect(page.getByText(/events/)).toBeVisible({ timeout: 10000 })
 })
 
 test('category filter chips are present', async ({ page }) => {

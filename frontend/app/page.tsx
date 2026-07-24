@@ -26,14 +26,22 @@ export default function TimelinePage() {
   return (
     <>
       <Nav active="timeline" />
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-slate-900">Case Timeline</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            <span className="font-medium text-slate-700">R v Nguyen</span>
-            {' · '}NSW District Court 2025
-            {' · '}{events.length} events
-          </p>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div className="mb-8">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Case Timeline</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                <span className="font-semibold text-gray-700">R v Nguyen</span>
+                <span className="mx-2 text-gray-300">·</span>
+                NSW District Court 2025
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {events.length} events
+            </div>
+          </div>
         </div>
         <TimelineClient events={events} />
       </main>

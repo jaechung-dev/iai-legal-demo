@@ -3,16 +3,18 @@ Legal Intelligence Demo API
 Port 9300
 """
 import os
-import re, json, asyncio, secrets
+import re, json, asyncio, secrets, hashlib
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 from dotenv import load_dotenv
 load_dotenv()
 import psycopg2
 from typing import AsyncIterator
 
-from fastapi import FastAPI, HTTPException
+import httpx
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from jose import jwt
 
@@ -31,11 +33,27 @@ DSN        = os.getenv("DATABASE_URL", "host=127.0.0.1 port=5432 dbname=bella_le
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
 JWT_ALG    = "HS256"
 
+GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:3131")
+BACKEND_URL          = os.getenv("BACKEND_URL", "http://localhost:20000")
+
 DEMO_USERS = {
     "sojung": {"password": os.getenv("SOJUNG_PASSWORD", "demo1234"), "name": "Sojung Kwon", "role": "user"},
     "demo":   {"password": "demo",                                    "name": "Demo User",   "role": "user"},
     "admin":  {"password": os.getenv("ADMIN_PASSWORD", "admin1234"), "name": "Admin",       "role": "admin"},
 }
+
+# In-memory user store for demo registrations {username: {name, email, password_hash, salt, role}}
+REGISTERED_USERS: dict = {}
+# In-memory OAuth state tokens for CSRF protection
+OAUTH_STATES: dict = {}
+
+def _hash_password(password: str, salt: str) -> str:
+    return hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
+
+def _verify_password(password: str, salt: str, stored_hash: str) -> bool:
+    return _hash_password(password, salt) == stored_hash
 
 EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
 CHAT_MODEL  = os.getenv("CHAT_MODEL",  "gpt-4o-mini")
@@ -228,17 +246,30 @@ def _make_jwt(sub: str, name: str, role: str, scopes: list[str], hours: int = 24
 
 @app.post("/auth/login")
 def login(req: LoginRequest):
-    user = DEMO_USERS.get(req.username)
-    if not user or user["password"] != req.password:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    token = _make_jwt(req.username, user["name"], user["role"],
-                      ["search", "ask", "chat", "timeline"])
-    return {
-        "access_token": token,
-        "token_type":   "bearer",
-        "expires_in":   86400,
-        "user": {"username": req.username, "name": user["name"], "role": user["role"]},
-    }
+    key = req.username.lower().strip()
+    # Check demo users (plain-text passwords)
+    demo = DEMO_USERS.get(req.username)
+    if demo and demo["password"] == req.password:
+        token = _make_jwt(req.username, demo["name"], demo["role"],
+                          ["search", "ask", "chat", "timeline"])
+        return {
+            "access_token": token,
+            "token_type":   "bearer",
+            "expires_in":   86400,
+            "user": {"username": req.username, "name": demo["name"], "role": demo["role"]},
+        }
+    # Check registered users (hashed passwords)
+    reg = REGISTERED_USERS.get(key)
+    if reg and reg["password_hash"] and _verify_password(req.password, reg["salt"], reg["password_hash"]):
+        token = _make_jwt(key, reg["name"], reg["role"],
+                          ["search", "ask", "chat", "timeline"])
+        return {
+            "access_token": token,
+            "token_type":   "bearer",
+            "expires_in":   86400,
+            "user": {"username": key, "name": reg["name"], "role": reg["role"]},
+        }
+    raise HTTPException(status_code=401, detail="Invalid username or password")
 
 @app.post("/auth/oauth/token")
 def oauth_token(req: OAuthTokenRequest):
@@ -253,6 +284,91 @@ def oauth_token(req: OAuthTokenRequest):
         "expires_in":   3600,
         "scope":        " ".join(req.scopes),
     }
+
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+@app.post("/auth/register")
+def register(req: RegisterRequest):
+    username = req.email.lower().strip()
+    if username in DEMO_USERS or username in REGISTERED_USERS:
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    salt = secrets.token_hex(16)
+    REGISTERED_USERS[username] = {
+        "name": req.name.strip(),
+        "email": username,
+        "password_hash": _hash_password(req.password, salt),
+        "salt": salt,
+        "role": "user",
+    }
+    token = _make_jwt(username, req.name.strip(), "user", ["search", "ask", "chat", "timeline"])
+    return {
+        "access_token": token,
+        "token_type":   "bearer",
+        "expires_in":   86400,
+        "user": {"username": username, "name": req.name.strip(), "role": "user"},
+    }
+
+
+@app.get("/auth/google")
+def google_login():
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=501, detail="Google OAuth not configured — set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")
+    state = secrets.token_urlsafe(32)
+    OAUTH_STATES[state] = True
+    params = urlencode({
+        "client_id":     GOOGLE_CLIENT_ID,
+        "redirect_uri":  f"{BACKEND_URL}/auth/google/callback",
+        "response_type": "code",
+        "scope":         "openid email profile",
+        "access_type":   "offline",
+        "state":         state,
+        "prompt":        "select_account",
+    })
+    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+
+
+@app.get("/auth/google/callback")
+async def google_callback(code: str = Query(...), state: str = Query(...)):
+    if not OAUTH_STATES.pop(state, None):
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code":          code,
+                "client_id":     GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri":  f"{BACKEND_URL}/auth/google/callback",
+                "grant_type":    "authorization_code",
+            },
+        )
+        if token_resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to exchange OAuth code")
+        token_data = token_resp.json()
+
+        info_resp = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {token_data['access_token']}"},
+        )
+        userinfo = info_resp.json()
+
+    email = userinfo.get("email", "").lower()
+    name  = userinfo.get("name", email)
+    if email not in REGISTERED_USERS and email not in DEMO_USERS:
+        salt = secrets.token_hex(16)
+        REGISTERED_USERS[email] = {
+            "name": name, "email": email,
+            "password_hash": "", "salt": salt, "role": "user",
+        }
+
+    jwt_token = _make_jwt(email, name, "user", ["search", "ask", "chat", "timeline"])
+    return RedirectResponse(f"{FRONTEND_URL}/auth/callback?token={jwt_token}")
 
 
 @app.post("/search")
