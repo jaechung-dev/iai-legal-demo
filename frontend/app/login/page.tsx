@@ -70,12 +70,12 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(52,211,153,0.08)_0%,_transparent_60%)]" />
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
 
-        <div className="relative flex items-center gap-2.5">
+        <Link href="/" className="relative flex items-center gap-2.5 w-fit">
           <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
             <Scale className="w-5 h-5 text-white" />
           </div>
           <span className="font-bold text-white text-base tracking-tight">{APP_NAME}</span>
-        </div>
+        </Link>
 
         <div className="relative space-y-10">
           <div>
@@ -111,12 +111,12 @@ export default function LoginPage() {
           <Suspense fallback={null}><LoginBanner /></Suspense>
 
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2.5">
+          <Link href="/" className="lg:hidden flex items-center gap-2.5 w-fit">
             <div className="w-8 h-8 bg-zinc-950 rounded-lg flex items-center justify-center">
               <Scale className="w-4 h-4 text-emerald-400" />
             </div>
             <span className="font-bold text-gray-900">{APP_NAME}</span>
-          </div>
+          </Link>
 
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
