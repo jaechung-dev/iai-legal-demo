@@ -1,71 +1,100 @@
 # ProBono AI — Legal Intelligence Platform
 
-AI-powered legal research and case management demo for Australian law.
+Semantic search and RAG-powered Q&A over NSW legislation and caselaw, built as a production demo for [probonoai.com.au](https://probonoai.com.au).
 
-**Live:** [probonoai.com.au](https://probonoai.com.au)
+**Live demo →** [probonoai.com.au](https://probonoai.com.au) · login: `demo` / `demo`
 
 ---
 
-## Overview
+## What it does
 
-ProBono AI helps users search NSW legislation and caselaw using semantic search, ask legal questions in plain English using RAG, and explore a case timeline as an evidence bundle. Targeted at non-lawyers and pro bono contexts.
+Non-lawyers can search NSW legislation and caselaw using natural language, ask legal questions and get plain-English answers with cited sources, and explore a case timeline as a structured evidence bundle.
+
+The interesting parts technically:
+
+- **Semantic search** over ~180K embedded legal text chunks using pgvector HNSW cosine similarity
+- **RAG pipeline** built with LangChain LCEL — retrieval → prompt → LLM → SSE stream
+- **Multi-turn chat** with context window management and real-time source attribution
+- **MCP server** wrapping the RAG tools so Claude Desktop (or any MCP client) can search and ask
+- **Serverless** — FastAPI on Lambda via Mangum, static Next.js on S3 + CloudFront
+
+---
+
+## Stack
 
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 15 + React 19 (static export) → S3 + CloudFront |
-| Backend | FastAPI + LangChain → AWS Lambda + API Gateway HTTP v2 |
-| Database | Supabase (PostgreSQL + pgvector, 1536-dim) |
+| Backend | FastAPI + LangChain → AWS Lambda (Mangum) + API Gateway HTTP v2 |
+| Database | Supabase PostgreSQL + pgvector (1536-dim, HNSW cosine) |
 | Embeddings | OpenAI `text-embedding-3-small` |
-| LLM | Anthropic `claude-haiku-4-5` |
+| LLM | OpenAI `gpt-4o-mini` (switchable to any Anthropic model via `CHAT_MODEL` env var) |
+| MCP | FastMCP (streamable HTTP transport, JWT Bearer auth) |
 | IaC | Terraform (ap-southeast-2) |
 
 ---
 
-## Features
-
-- **Login** — JWT auth, demo accounts (see below)
-- **Timeline** — Case event viewer with category filters (demo: *R v Nguyen*, NSW District Court 2025)
-- **Search** — Semantic search over NSW legislation and caselaw chunks
-- **Chat / Ask the Law** — RAG-powered legal Q&A with streaming answers and retrieved-source sidebar
-- **Connect** — MCP token issuance page: exchange an API key for a scoped JWT to connect Claude or any MCP client
-- **MCP Server** — `mcp_server.py` exposes `search`, `ask`, `fetch`, `collections` tools on port 20002
-
-### RAG Pipeline
+## RAG Pipeline
 
 ```
-user query → OpenAIEmbeddings → pgvector cosine search
-           → ChatPromptTemplate → Claude Haiku 4.5 → StreamingResponse (SSE)
+User query
+  → OpenAIEmbeddings (text-embedding-3-small, 1536-dim)
+  → pgvector HNSW cosine search (legislation_chunks / caselaw_chunks)
+  → LangChain LCEL chain: retrieved docs → ChatPromptTemplate → LLM
+  → StreamingResponse (SSE) → frontend fetchEventSource
 ```
 
 Three retrievers in `main.py`:
-- `LegislationRetriever` — queries `legislation_chunks` by jurisdiction
-- `CaselawRetriever` — queries `caselaw_chunks`
-- `CaseEventRetriever` — queries `demo_case_events` by case_id
 
-### MCP Server
+| Retriever | Table | Filter |
+|---|---|---|
+| `LegislationRetriever` | `legislation_chunks` | jurisdiction (NSW / Commonwealth / both) |
+| `CaselawRetriever` | `caselaw_chunks` | — |
+| `CaseEventRetriever` | `demo_case_events` | case_id |
 
-`mcp_server.py` runs as a separate service and wraps the RAG API for Claude Desktop and other MCP clients. JWT auth is required on every tool call — get a token from `/auth/oauth/token` or from the `/connect` page in the UI.
+The `/chat` endpoint retrieves from both legislation and caselaw, sends a `sources` SSE event before streaming tokens, and supports multi-turn history (last 8 messages passed as LangChain message objects).
+
+### Switching LLM providers
+
+Set `CHAT_MODEL` in `.env`:
 
 ```bash
-python mcp_server.py   # port 20002
+CHAT_MODEL=gpt-4o-mini          # OpenAI (default)
+CHAT_MODEL=claude-haiku-4-5     # Anthropic — auto-imports ChatAnthropic
 ```
 
-Add to Claude Desktop `claude_desktop_config.json`:
+---
+
+## MCP Server
+
+`mcp_server.py` exposes four tools over streamable HTTP (port 20002):
+
+| Tool | Description |
+|---|---|
+| `search` | Semantic search — legislation, caselaw, or case events |
+| `ask` | RAG Q&A with streamed answer + sources |
+| `fetch` | Full case timeline by case_id |
+| `collections` | List available data collections |
+
+**Auth:** every request requires `Authorization: Bearer <jwt>`. Get a token by logging in at probonoai.com.au — the same JWT works for both the web UI and MCP.
+
+Connect Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "legal-rag": {
-      "url": "http://localhost:20002/mcp",
-      "env": {
-        "MCP_DEFAULT_JWT": "<paste token from /connect page>"
-      }
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://api.probonoai.com.au/mcp",
+        "--header",
+        "Authorization: Bearer <your-jwt>"
+      ]
     }
   }
 }
 ```
-
-Demo API key: `lrag-demo`
 
 ---
 
@@ -73,205 +102,125 @@ Demo API key: `lrag-demo`
 
 ```
 iai-legal-demo/
-├── main.py               # FastAPI app + Mangum Lambda handler (port 20000)
+├── main.py               # FastAPI app — auth, search, ask, chat, timeline (port 20000)
 ├── mcp_server.py         # FastMCP server — search/ask/fetch/collections (port 20002)
 ├── auth.py               # JWT helpers
-├── schema.sql            # Supabase table definitions (pgvector 1536-dim)
-├── ingest.py             # Ingest demo case events
-├── ingest_law.py         # Ingest legislation/caselaw chunks from CSV
-├── requirements.txt      # Python dependencies
-├── build_lambda.sh       # Build lambda.zip for deployment
-├── deploy_frontend.sh    # Build Next.js + sync to S3 + invalidate CloudFront
+├── schema.sql            # PostgreSQL schema — pgvector tables + HNSW indexes
+├── ingest.py             # Embed and ingest case events (JSONL → demo_case_events)
+├── ingest_law.py         # Embed and ingest legislation/caselaw chunks (CSV → tables)
+├── requirements.txt
+├── build_lambda.sh       # Package Lambda zip
+├── deploy_frontend.sh    # Build Next.js → sync S3 → invalidate CloudFront
 ├── cases/
-│   └── case_nguyen_v_r.jsonl   # Demo case event data
-├── frontend/             # Next.js app
+│   └── case_nguyen_v_r.jsonl   # Demo case data (R v Nguyen, NSW District Court 2025)
+├── legislation_demo.csv  # Sample legislation chunks for local setup
+├── caselaw_demo.csv      # Sample caselaw chunks for local setup
+├── frontend/
 │   ├── app/
 │   │   ├── page.tsx      # / — Case timeline
 │   │   ├── chat/         # /chat — RAG chat + sources panel
-│   │   ├── search/       # /search — Search + Ask modes
-│   │   ├── connect/      # /connect — MCP token issuance
-│   │   └── login/        # /login — Auth
-│   ├── components/
-│   │   ├── Nav.tsx
-│   │   ├── TimelineClient.tsx
-│   │   └── ui/           # shadcn/ui components
-│   └── out/              # Static export (committed, deployed to S3)
-└── terraform/
-    ├── main.tf           # S3, CloudFront, ACM cert
-    ├── lambda.tf         # Lambda, API Gateway HTTP v2
-    ├── iam.tf            # Lambda execution role
-    ├── cert.tf           # ACM cert (us-east-1 for CloudFront)
-    ├── variables.tf
-    └── outputs.tf        # URLs + bucket name
+│   │   ├── search/       # /search — Semantic search + Ask modes
+│   │   ├── connect/      # /connect — MCP token page
+│   │   └── login/
+│   └── components/
+│       ├── TimelineClient.tsx
+│       └── Nav.tsx
+└── terraform/            # Lambda + API Gateway + S3 + CloudFront + ACM
 ```
 
 ---
 
-## AWS Services
+## Local Setup
 
-| Service | Purpose |
-|---|---|
-| **Lambda** (Python 3.12, 512 MB, 60s timeout) | Stateless backend — auth, RAG, search, chat, timeline |
-| **API Gateway HTTP v2** | HTTPS entry point → Lambda proxy |
-| **S3** | Static frontend hosting (`frontend/out/`) |
-| **CloudFront** | CDN + HTTPS for `probonoai.com.au` |
-| **ACM** | TLS cert (provisioned in `us-east-1` for CloudFront) |
-| **CloudWatch Logs** | Lambda execution logs |
-| **IAM** | Lambda execution role with CloudWatch write access |
-
-### Lambda Microservices (logical split within one function)
-
-All routes are stateless and run inside a single Lambda function wrapped by [Mangum](https://mangum.io/). Each logical service maps to one or more FastAPI endpoints:
-
-| Microservice | Endpoints | Notes |
-|---|---|---|
-| **auth** | `POST /auth/login`, `POST /auth/oauth/token` | JWT issuance (24h user, 1h MCP) |
-| **search** | `POST /search` | Semantic search — legislation / caselaw / case events |
-| **rag** | `POST /ask`, `POST /chat` | SSE streaming — LangChain + Claude Haiku 4.5 |
-| **case** | `GET /case/{id}/timeline` | Case event list from Supabase |
-| **health** | `GET /health` | DB connectivity check |
-
----
-
-## Infrastructure
-
-| Resource | Value |
-|---|---|
-| Frontend | `https://probonoai.com.au` |
-| CloudFront | `doaqo43b3vcmk.cloudfront.net` |
-| API (Lambda) | `https://6arf47x0pk.execute-api.ap-southeast-2.amazonaws.com/` |
-| S3 Bucket | `iai-legal-demo-frontend-18a03647` |
-| AWS Region | `ap-southeast-2` (Sydney) |
-| Database | Supabase `ap-southeast-1` (Singapore) |
-
----
-
-## Local Development
-
-### Prerequisites
+### 1. Environment
 
 ```bash
 cp .env.example .env
-# Fill in: OPENAI_API_KEY, DATABASE_URL (Supabase), JWT_SECRET
+# Fill in: OPENAI_API_KEY, DATABASE_URL (Supabase or any Postgres+pgvector), JWT_SECRET
 ```
 
-### Backend
+### 2. Database
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+psql $DATABASE_URL -f schema.sql
+
+python ingest.py                                          # case events
+python ingest_law.py legislation_demo.csv legislation     # ~200 legislation chunks
+python ingest_law.py caselaw_demo.csv caselaw             # ~200 caselaw chunks
+```
+
+### 3. Backend
+
+```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python main.py                  # → http://localhost:20000
+python main.py          # → http://localhost:20000
 ```
 
-### MCP Server (optional)
+### 4. MCP Server (optional)
 
 ```bash
-python mcp_server.py            # → http://localhost:20002
+python mcp_server.py    # → http://localhost:20002
 ```
 
-### Frontend
+### 5. Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev                     # → http://localhost:20001
-# .env.local already sets NEXT_PUBLIC_API_URL=http://localhost:20000
+npm run dev             # → http://localhost:20001
 ```
 
 ---
 
-## API Endpoints
+## API Reference
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/health` | DB + model health check |
-| POST | `/auth/login` | Username/password → 24h JWT |
-| POST | `/auth/oauth/token` | API key → 1h scoped JWT (for MCP) |
-| POST | `/search` | Semantic search (legislation \| caselaw \| case_events) |
-| POST | `/ask` | RAG Q&A, streaming SSE |
-| POST | `/chat` | Multi-turn chat, streaming SSE + sources payload |
-| GET | `/case/{case_id}/timeline` | Case event list |
+| `GET` | `/health` | DB + model health check |
+| `POST` | `/auth/login` | Username + password → 24h JWT |
+| `POST` | `/auth/oauth/token` | API key → 1h scoped JWT |
+| `POST` | `/search` | Semantic search (`legislation` \| `caselaw` \| `case_events`) |
+| `POST` | `/ask` | RAG Q&A — SSE stream |
+| `POST` | `/chat` | Multi-turn RAG chat — SSE stream with sources event |
+| `GET` | `/case/{case_id}/timeline` | Ordered case event list |
 
 ---
 
 ## Deployment
 
-### 1. Backend (Lambda)
+### Backend → Lambda
 
 ```bash
-./build_lambda.sh       # creates lambda.zip
+./build_lambda.sh    # creates lambda.zip
 cd terraform
-terraform apply         # deploys Lambda + API Gateway + S3 + CloudFront
+terraform apply      # Lambda + API Gateway + S3 + CloudFront + ACM cert
 ```
 
-### 2. Frontend (S3 + CloudFront)
+### Frontend → S3 + CloudFront
 
 ```bash
-./deploy_frontend.sh    # builds Next.js, syncs to S3, invalidates CloudFront cache
+./deploy_frontend.sh    # build → S3 sync → CloudFront invalidation
 ```
 
 ---
 
-## Database Setup
+## AWS Architecture
 
-Schema is in `schema.sql` — run once against Supabase:
-
-```bash
-psql $DATABASE_URL -f schema.sql
+```
+probonoai.com.au
+  → CloudFront (CDN + HTTPS)
+      ├── S3 (static Next.js export)
+      └── API Gateway HTTP v2
+            └── Lambda (FastAPI + Mangum)
+                  └── Supabase (PostgreSQL + pgvector)
 ```
 
-Ingest demo data:
-
-```bash
-python ingest.py                                         # case events (R v Nguyen)
-python ingest_law.py legislation_demo.csv legislation    # sample legislation chunks
-python ingest_law.py caselaw_demo.csv caselaw            # sample caselaw chunks
-```
-
----
-
-## Demo Accounts
-
-| Username | Password | Role |
-|---|---|---|
-| `demo` | `demo1234` | General user |
-| `admin` | `admin1234` | Admin view |
-
----
-
-## What to Include in a Public Repo
-
-Safe to publish — contains no secrets or account-specific values:
-
-| Path | Notes |
+| Service | Purpose |
 |---|---|
-| `main.py`, `mcp_server.py`, `auth.py` | Source code |
-| `requirements.txt`, `.env.example` | Dependencies and env template |
-| `schema.sql` | DB schema (no data) |
-| `ingest.py`, `ingest_law.py` | Data pipeline scripts |
-| `build_lambda.sh`, `deploy_frontend.sh` | Deployment scripts |
-| `cases/` | Demo case data (JSONL) |
-| `frontend/` source | All `app/`, `components/`, config files |
-| `terraform/*.tf` | Infrastructure-as-code (no state or secrets) |
-
-**Do not publish:**
-
-| Path | Reason |
-|---|---|
-| `.env` | Contains API keys |
-| `terraform/terraform.tfvars` | Account-specific values |
-| `terraform/terraform.tfstate*` | Live infra state — treat as secrets |
-| `terraform/.terraform/` | Provider binaries |
-| `frontend/out/` | Build artifact — deploy to S3, not git |
-| `frontend/node_modules/` | Dependencies |
-| `lambda.zip`, `lambda_pkg/` | Build artifacts |
-
----
-
-## Keep Supabase Alive (Free Tier)
-
-The free Supabase project pauses after 7 days of inactivity. Set up UptimeRobot (free) to ping `/health` every 5 minutes:
-
-```
-https://6arf47x0pk.execute-api.ap-southeast-2.amazonaws.com/health
-```
+| Lambda (512 MB, 60s) | Stateless backend — all API routes |
+| API Gateway HTTP v2 | HTTPS entry point + Lambda proxy |
+| S3 | Static frontend |
+| CloudFront | CDN + HTTPS + cache |
+| ACM | TLS certificate |
+| Supabase | PostgreSQL + pgvector (managed, ap-southeast-1) |
