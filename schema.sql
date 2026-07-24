@@ -4,7 +4,7 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Case timeline events
-CREATE TABLE IF NOT EXISTS demo_case_events (
+CREATE TABLE IF NOT EXISTS case_events (
     id           SERIAL PRIMARY KEY,
     case_id      TEXT NOT NULL,
     date         DATE NOT NULL,
@@ -16,8 +16,8 @@ CREATE TABLE IF NOT EXISTS demo_case_events (
     attachments  JSONB DEFAULT '[]',
     embedding    vector(1536)
 );
-CREATE INDEX IF NOT EXISTS demo_case_events_case_id_idx ON demo_case_events (case_id);
-CREATE INDEX IF NOT EXISTS demo_case_events_embedding_idx ON demo_case_events
+CREATE INDEX IF NOT EXISTS case_events_case_id_idx ON case_events (case_id);
+CREATE INDEX IF NOT EXISTS case_events_embedding_idx ON case_events
     USING hnsw (embedding vector_cosine_ops);
 
 -- Legislation chunks

@@ -219,11 +219,8 @@ test.describe('Connect page UI', () => {
   test('creating a token reveals it once with copy button', async ({ page }) => {
     await loginAs(page, 'demo', 'demo1234')
     await page.goto('/connect/')
-    await page.waitForLoadState('networkidle')
-    const generateBtn = page.getByRole('button', { name: /generate/i })
-    await generateBtn.waitFor({ state: 'visible', timeout: 10000 })
     await page.getByPlaceholder(/token name/i).fill('playwright-ui-test')
-    await generateBtn.click()
+    await page.getByRole('button', { name: /generate/i }).click()
 
     await expect(page.getByText('Shown once only')).toBeVisible({ timeout: 10000 })
     await expect(page.getByText(/^mcp-/)).toBeVisible()

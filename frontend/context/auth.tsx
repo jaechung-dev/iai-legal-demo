@@ -12,6 +12,7 @@ type User = {
 type AuthCtx = {
   user: User | null
   token: string | null
+  loading: boolean
   login: (username: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<{ email_verified: boolean }>
   loginWithToken: (token: string, refreshToken?: string) => void
@@ -56,8 +57,9 @@ function decode(token: string): User {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser]   = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(null)
+  const [user, setUser]       = useState<User | null>(null)
+  const [token, setToken]     = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const _store = useCallback((access: string, refresh?: string) => {
     const ls = safeStorage()
@@ -93,19 +95,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // On mount: restore session or silently refresh
   useEffect(() => {
     const ls = safeStorage()
-    if (!ls) return
+    if (!ls) { setLoading(false); return }
     const t = ls.getItem('iai_token')
     const r = ls.getItem('iai_refresh')
     if (t && !isExpired(t)) {
       setToken(t)
       setUser(decode(t))
+      setLoading(false)
       // Pre-emptively refresh if expiring in < 5 min
       if (r && isExpiringSoon(t)) refreshAuth()
     } else if (r) {
-      refreshAuth()
+      refreshAuth().finally(() => setLoading(false))
     } else {
       ls.removeItem('iai_token')
       ls.removeItem('iai_refresh')
+      setLoading(false)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -175,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, token, login, register, loginWithToken,
+      user, token, loading, login, register, loginWithToken,
       logout, refreshAuth, resendVerification,
     }}>
       {children}

@@ -32,7 +32,7 @@ function formatDate(iso: string): string {
 }
 
 export default function ConnectPage() {
-  const { user, token } = useAuth()
+  const { user, token, loading } = useAuth()
   const router = useRouter()
 
   const [tokens, setTokens]       = useState<MCPToken[]>([])
@@ -55,9 +55,10 @@ export default function ConnectPage() {
   }, [token])
 
   useEffect(() => {
+    if (loading) return
     if (!user) { router.replace('/login/'); return }
     loadTokens()
-  }, [user, router, loadTokens])
+  }, [user, loading, router, loadTokens])
 
   async function createToken() {
     if (!token) return
@@ -113,7 +114,7 @@ export default function ConnectPage() {
     },
   }, null, 2)
 
-  if (!user) return null
+  if (loading || !user) return null
 
   return (
     <>

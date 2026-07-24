@@ -10,7 +10,6 @@ const { useAuth } = await import('@/context/auth')
 
 describe('useGuestQuota', () => {
   beforeEach(() => {
-    localStorage.clear()
     vi.mocked(useAuth).mockReturnValue({ user: null } as any)
   })
 

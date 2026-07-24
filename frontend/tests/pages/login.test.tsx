@@ -47,7 +47,7 @@ describe('LoginPage', () => {
     vi.mocked(useAuth).mockReturnValue({ login: mockLogin, user: null, token: null } as any)
     render(<LoginPage />)
     fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'bad@user.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
+    fireEvent.submit(document.querySelector('form')!)
     await waitFor(() =>
       expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument()
     )
@@ -82,7 +82,7 @@ describe('LoginPage', () => {
     vi.mocked(useAuth).mockReturnValue({ login: mockLogin, user: null, token: null } as any)
     render(<LoginPage />)
     fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'demo' } })
-    fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
+    fireEvent.submit(document.querySelector('form')!)
     await waitFor(() => expect(mockLogin).toHaveBeenCalledWith('demo', ''))
   })
 })

@@ -48,7 +48,7 @@ describe('LoginModal', () => {
     vi.mocked(useAuth).mockReturnValue({ login: mockLogin, user: null, token: null } as any)
     render(<LoginModal onClose={onClose} />)
     fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'bad@user.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /sign in/i }))
+    fireEvent.submit(document.querySelector('form')!)
     await waitFor(() =>
       expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument()
     )

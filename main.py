@@ -32,18 +32,28 @@ from pydantic import Field
 
 # ── config ────────────────────────────────────────────────────────────────────
 
-DSN        = os.getenv("DATABASE_URL", "host=127.0.0.1 port=5432 dbname=bella_legal user=postgres password=postgres")
-JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production")
+DSN        = os.getenv("DATABASE_URL", "")
+JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALG    = "HS256"
+
+if not DSN:
+    raise RuntimeError("DATABASE_URL is required")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET is required")
 
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:20001")
 BACKEND_URL          = os.getenv("BACKEND_URL", "http://localhost:20000")
 
+_demo_pw  = os.getenv("DEMO_PASSWORD")
+_admin_pw = os.getenv("ADMIN_PASSWORD")
+if not _demo_pw or not _admin_pw:
+    raise RuntimeError("DEMO_PASSWORD and ADMIN_PASSWORD are required")
+
 SEED_USERS = {
-    "demo":  {"password": os.getenv("DEMO_PASSWORD", "demo1234"),   "name": "Guest",  "role": "user"},
-    "admin": {"password": os.getenv("ADMIN_PASSWORD", "admin1234"), "name": "Admin",  "role": "admin"},
+    "demo":  {"password": _demo_pw,  "name": "Guest", "role": "user"},
+    "admin": {"password": _admin_pw, "name": "Admin", "role": "admin"},
 }
 
 # Short-lived CSRF tokens for the OAuth dance — in-memory is fine (same request flow)
@@ -152,7 +162,7 @@ class CaseEventRetriever(BaseRetriever):
             cur.execute("""
                 SELECT date, category, event_type, subject, content,
                        1 - (embedding <=> %s::vector) AS score
-                FROM demo_case_events
+                FROM case_events
                 WHERE case_id = %s AND embedding IS NOT NULL
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
@@ -742,7 +752,7 @@ def timeline(case_id: str):
         cur = conn.cursor()
         cur.execute("""
             SELECT date, category, event_type, subject, summary, content, attachments
-            FROM demo_case_events
+            FROM case_events
             WHERE case_id = %s
             ORDER BY date ASC
         """, (case_id,))

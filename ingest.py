@@ -1,5 +1,5 @@
 """
-Ingest demo case events into demo_case_events table.
+Ingest case events into case_events table.
 Usage: python ingest.py [case_id] [jsonl_file]
 """
 import os, sys, json
@@ -29,12 +29,12 @@ print(f"Done — dim={len(vectors[0])}")
 
 conn = psycopg2.connect(DSN)
 cur  = conn.cursor()
-cur.execute("DELETE FROM demo_case_events WHERE case_id = %s", (case_id,))
+cur.execute("DELETE FROM case_events WHERE case_id = %s", (case_id,))
 
 for e, vec in zip(events, vectors):
     vec_str = "[" + ",".join(str(x) for x in vec) + "]"
     cur.execute("""
-        INSERT INTO demo_case_events
+        INSERT INTO case_events
             (case_id, date, category, event_type, subject, summary, content, attachments, embedding)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
     """, (
