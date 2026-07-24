@@ -44,6 +44,15 @@ jobs:
       - name: Build lambda.zip
         run: bash build_lambda.sh
 
+      - name: Debug OIDC token claims
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+          PAYLOAD=$(echo $TOKEN | cut -d. -f2 | python3 -c "import sys,base64,json; d=sys.stdin.read().strip(); d+='=='*((4-len(d)%4)%4); print(json.dumps(json.loads(base64.urlsafe_b64decode(d)), indent=2))")
+          echo "sub: $(echo $PAYLOAD | python3 -c "import sys,json; print(json.load(sys.stdin)['sub'])")"
+          echo "aud: $(echo $PAYLOAD | python3 -c "import sys,json; print(json.load(sys.stdin)['aud'])")"
+          echo "iss: $(echo $PAYLOAD | python3 -c "import sys,json; print(json.load(sys.stdin)['iss'])")"
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
