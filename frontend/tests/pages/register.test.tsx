@@ -78,7 +78,7 @@ describe('RegisterPage', () => {
     )
   })
 
-  test('shows verify email screen after successful registration', async () => {
+  test('shows OTP entry screen after successful registration', async () => {
     const mockRegister = vi.fn().mockResolvedValue({ email_verified: false })
     vi.mocked(useAuth).mockReturnValue({ register: mockRegister, user: null } as any)
     render(<RegisterPage />)
@@ -88,9 +88,9 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByPlaceholderText(/repeat your password/i), { target: { value: 'SecurePass99!' } })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
     await waitFor(() =>
-      expect(screen.getByText(/check your email/i)).toBeInTheDocument()
+      expect(screen.getByText(/enter verification code/i)).toBeInTheDocument()
     )
-    expect(screen.getByRole('button', { name: /continue to app/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /verify email/i })).toBeInTheDocument()
   })
 
   test('shows registered email in verify screen', async () => {

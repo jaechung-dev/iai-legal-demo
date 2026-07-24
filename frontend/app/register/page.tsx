@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Scale, ArrowRight, Check, Eye, EyeOff } from 'lucide-react'
@@ -26,6 +26,19 @@ export default function RegisterPage() {
   const [loading, setLoading]     = useState(false)
   const [verifyEmail, setVerifyEmail] = useState('')
 
+  // OTP state
+  const [otp, setOtp]             = useState<string[]>(Array(6).fill(''))
+  const [otpError, setOtpError]   = useState('')
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [cooldown, setCooldown]   = useState(0)
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -35,11 +48,71 @@ export default function RegisterPage() {
     try {
       await register(name, email, password)
       setVerifyEmail(email)
+      setCooldown(60)
+      setTimeout(() => otpRefs.current[0]?.focus(), 100)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleOtpChange(i: number, val: string) {
+    const digit = val.replace(/\D/g, '').slice(-1)
+    const next = [...otp]
+    next[i] = digit
+    setOtp(next)
+    if (digit && i < 5) otpRefs.current[i + 1]?.focus()
+  }
+
+  function handleOtpKeyDown(i: number, e: React.KeyboardEvent) {
+    if (e.key === 'Backspace' && !otp[i] && i > 0) {
+      otpRefs.current[i - 1]?.focus()
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent) {
+    e.preventDefault()
+    const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    setOtp([...digits.split(''), ...Array(6 - digits.length).fill('')])
+    otpRefs.current[Math.min(digits.length, 5)]?.focus()
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault()
+    setOtpError('')
+    const code = otp.join('')
+    if (code.length !== 6) { setOtpError('Please enter all 6 digits'); return }
+    setOtpLoading(true)
+    try {
+      const res = await fetch(`${API}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verifyEmail, code }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        setOtpError(d.detail || 'Invalid code. Please try again.')
+      } else {
+        router.push('/login/?verified=1')
+      }
+    } catch {
+      setOtpError('Network error. Please try again.')
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    setCooldown(60)
+    setOtp(Array(6).fill(''))
+    setOtpError('')
+    await fetch(`${API}/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: verifyEmail }),
+    })
+    setTimeout(() => otpRefs.current[0]?.focus(), 100)
   }
 
   if (verifyEmail) {
@@ -52,32 +125,51 @@ export default function RegisterPage() {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Check your email</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Enter verification code</h1>
             <p className="text-sm text-gray-500 mt-2">
-              We sent a verification link to <span className="font-medium text-gray-700">{verifyEmail}</span>
+              We emailed a 6-digit code to{' '}
+              <span className="font-medium text-gray-700">{verifyEmail}</span>
             </p>
-            <p className="text-sm text-gray-400 mt-1">Click it to activate your account.</p>
           </div>
-          <button
-            onClick={() => router.push('/chat/')}
-            className="w-full bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl h-11 text-sm font-medium transition-all flex items-center justify-center gap-2"
-          >
-            Continue to app <ArrowRight className="w-4 h-4" />
-          </button>
+          <form onSubmit={handleVerify} className="space-y-5">
+            <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
+              {otp.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={el => { otpRefs.current[i] = el }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={e => handleOtpChange(i, e.target.value)}
+                  onKeyDown={e => handleOtpKeyDown(i, e)}
+                  className="w-12 h-14 text-center text-xl font-bold border border-gray-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all shadow-sm"
+                  aria-label={`Digit ${i + 1}`}
+                />
+              ))}
+            </div>
+            {otpError && (
+              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600 text-left">
+                {otpError}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={otpLoading || otp.join('').length !== 6}
+              className="w-full bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl h-11 text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
+            >
+              {otpLoading ? 'Verifying…' : <>Verify email <ArrowRight className="w-4 h-4" /></>}
+            </button>
+          </form>
           <p className="text-xs text-gray-400">
             Didn&apos;t receive it?{' '}
-            <button
-              onClick={async () => {
-                await fetch(`${API}/auth/resend-verification`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ email: verifyEmail }),
-                })
-              }}
-              className="text-emerald-600 hover:underline"
-            >
-              Resend
-            </button>
+            {cooldown > 0 ? (
+              <span className="text-gray-400">Resend in {cooldown}s</span>
+            ) : (
+              <button onClick={handleResend} className="text-emerald-600 hover:underline">
+                Resend code
+              </button>
+            )}
           </p>
         </div>
       </div>

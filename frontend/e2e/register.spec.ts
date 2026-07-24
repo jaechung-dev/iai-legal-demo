@@ -45,7 +45,7 @@ test('password strength indicator appears while typing', async ({ page }) => {
   await expect(page.getByText(/fair password/i)).toBeVisible()
 })
 
-test('register shows verify email screen on success', async ({ page }) => {
+test('register shows OTP entry screen on success', async ({ page }) => {
   await page.goto('/register')
   const ts = Date.now()
   await page.getByPlaceholder(/jane smith/i).fill('Playwright User')
@@ -53,7 +53,7 @@ test('register shows verify email screen on success', async ({ page }) => {
   await page.getByPlaceholder(/min. 8 characters/i).fill('SecurePass99!')
   await page.getByPlaceholder(/repeat your password/i).fill('SecurePass99!')
   await page.getByRole('button', { name: /create account/i }).click()
-  await expect(page.getByText(/check your email/i)).toBeVisible({ timeout: 10000 })
-  await expect(page.getByText(/verification link/i)).toBeVisible()
-  await expect(page.getByRole('button', { name: /continue to app/i })).toBeVisible()
+  await expect(page.getByText(/enter verification code/i)).toBeVisible({ timeout: 10000 })
+  await expect(page.getByText(/6-digit code/i)).toBeVisible()
+  await expect(page.getByRole('button', { name: /verify email/i })).toBeVisible()
 })
