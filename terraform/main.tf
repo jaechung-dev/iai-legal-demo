@@ -75,7 +75,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   default_root_object = "index.html"
   price_class         = "PriceClass_100"  # US/EU/Asia only — cheapest
-  aliases             = ["probonoai.com.au"]
+  aliases             = ["probonoai.com.au", "www.probonoai.com.au", "stage.probonoai.com.au"]
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name

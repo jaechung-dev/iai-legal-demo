@@ -5,7 +5,15 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Paperclip } from 'lucide-react'
-import type { CaseEvent } from '@/app/page'
+export type CaseEvent = {
+  date: string
+  category: string
+  event_type: string
+  subject: string
+  summary: string
+  content: string
+  attachments: { name: string; type: string; pages?: number }[]
+}
 
 const CATEGORIES = ['All', 'Offence', 'Investigation', 'Police', 'Court', 'Submissions', 'Verdict']
 
@@ -135,7 +143,7 @@ export default function TimelineClient({ events }: { events: CaseEvent[] }) {
                     <div className="mt-4">
                       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Attachments</p>
                       <div className="flex gap-2 flex-wrap">
-                        {selected.attachments.map((a, idx) => (
+                        {selected.attachments.map((a: { name: string; type: string; pages?: number }, idx: number) => (
                           <span
                             key={idx}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 font-medium shadow-sm"

@@ -19,11 +19,6 @@ variable "jwt_secret" {
   default     = "change-me-in-production"
 }
 
-variable "sojung_password" {
-  sensitive = true
-  default   = "demo1234"
-}
-
 variable "admin_password" {
   sensitive = true
   default   = "admin1234"

@@ -1,7 +1,8 @@
 resource "aws_acm_certificate" "frontend" {
-  provider          = aws.us_east_1
-  domain_name       = "probonoai.com.au"
-  validation_method = "DNS"
+  provider                  = aws.us_east_1
+  domain_name               = "probonoai.com.au"
+  subject_alternative_names = ["www.probonoai.com.au", "stage.probonoai.com.au"]
+  validation_method         = "DNS"
 
   lifecycle {
     create_before_destroy = true

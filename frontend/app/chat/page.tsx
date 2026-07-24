@@ -7,6 +7,8 @@ import Nav from '@/components/Nav'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import LoginModal from '@/components/LoginModal'
+import { useGuestQuota } from '@/hooks/useGuestQuota'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
 
@@ -27,6 +29,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false)
   const [showSources, setShowSources] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const { gate, showGate, dismissGate } = useGuestQuota()
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -34,6 +37,7 @@ export default function ChatPage() {
 
   async function sendMessage(question: string) {
     if (!question.trim() || loading) return
+    if (!gate()) return
     setInput('')
     setLoading(true)
     setSources([])
@@ -83,6 +87,7 @@ export default function ChatPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
+      {showGate && <LoginModal onClose={dismissGate} />}
       <Nav active="chat" />
 
       <div className="flex flex-1 min-h-0 relative">

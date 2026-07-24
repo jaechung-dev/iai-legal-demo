@@ -234,8 +234,7 @@ python ingest_law.py caselaw_demo.csv caselaw            # sample caselaw chunks
 
 | Username | Password | Role |
 |---|---|---|
-| `sojung` | `demo1234` | Client view |
-| `demo` | `demo` | General user |
+| `demo` | `demo1234` | General user |
 | `admin` | `admin1234` | Admin view |
 
 ---

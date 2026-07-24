@@ -16,11 +16,10 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DATABASE_URL    = var.database_url
-      OPENAI_API_KEY  = var.openai_api_key
-      JWT_SECRET      = var.jwt_secret
-      SOJUNG_PASSWORD = var.sojung_password
-      ADMIN_PASSWORD  = var.admin_password
+      DATABASE_URL   = var.database_url
+      OPENAI_API_KEY = var.openai_api_key
+      JWT_SECRET     = var.jwt_secret
+      ADMIN_PASSWORD = var.admin_password
     }
   }
 

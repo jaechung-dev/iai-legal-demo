@@ -5,6 +5,8 @@ import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { Search, MessageSquare, ChevronDown } from 'lucide-react'
 import Nav from '@/components/Nav'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import LoginModal from '@/components/LoginModal'
+import { useGuestQuota } from '@/hooks/useGuestQuota'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
 
@@ -30,9 +32,11 @@ export default function SearchPage() {
   const [answer, setAnswer] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { gate, showGate, dismissGate } = useGuestQuota()
 
   async function doSearch() {
     if (!query.trim()) return
+    if (!gate()) return
     setLoading(true)
     setResults([])
     setError('')
@@ -54,6 +58,7 @@ export default function SearchPage() {
 
   async function doAsk() {
     if (!query.trim()) return
+    if (!gate()) return
     setLoading(true)
     setAnswer('')
     setError('')
@@ -81,6 +86,7 @@ export default function SearchPage() {
 
   return (
     <>
+      {showGate && <LoginModal onClose={dismissGate} />}
       <Nav active="search" />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8">
 

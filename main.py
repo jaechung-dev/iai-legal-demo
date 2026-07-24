@@ -11,10 +11,12 @@ load_dotenv()
 import psycopg2
 from typing import AsyncIterator
 
+import time
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, RedirectResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from jose import jwt
 
@@ -39,9 +41,8 @@ FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:3131")
 BACKEND_URL          = os.getenv("BACKEND_URL", "http://localhost:20000")
 
 DEMO_USERS = {
-    "sojung": {"password": os.getenv("SOJUNG_PASSWORD", "demo1234"), "name": "Sojung Kwon", "role": "user"},
-    "demo":   {"password": "demo",                                    "name": "Demo User",   "role": "user"},
-    "admin":  {"password": os.getenv("ADMIN_PASSWORD", "admin1234"), "name": "Admin",       "role": "admin"},
+    "demo":  {"password": "demo1234",                                "name": "Demo User", "role": "user"},
+    "admin": {"password": os.getenv("ADMIN_PASSWORD", "admin1234"), "name": "Admin",     "role": "admin"},
 }
 
 # In-memory user store for demo registrations {username: {name, email, password_hash, salt, role}}
@@ -191,6 +192,34 @@ def strip_think(text: str) -> str:
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Legal Intelligence Demo", version="1.0")
+
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        duration_ms = round((time.time() - start) * 1000)
+        ip = (
+            request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+            or request.headers.get("x-real-ip", "")
+            or (request.client.host if request.client else "-")
+        )
+        user = "-"
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Bearer "):
+            try:
+                payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG])
+                user = payload.get("sub", "-")
+            except Exception:
+                pass
+        print(
+            f'ACCESS {datetime.now(timezone.utc).isoformat()} '
+            f'ip={ip} method={request.method} path={request.url.path} '
+            f'status={response.status_code} ms={duration_ms} user={user}',
+            flush=True,
+        )
+        return response
+
+app.add_middleware(AccessLogMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

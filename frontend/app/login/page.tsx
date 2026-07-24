@@ -167,8 +167,7 @@ export default function LoginPage() {
 
           <div className="space-y-2">
             {[
-              { label: 'Sojung Kwon', sub: 'Client view', u: 'sojung', p: 'demo1234' },
-              { label: 'Demo User',   sub: 'Guest access',  u: 'demo',   p: 'demo'     },
+              { label: 'Demo User', sub: 'Guest access', u: 'demo', p: 'demo1234' },
             ].map(({ label, sub, u, p }) => (
               <button
                 key={u}
