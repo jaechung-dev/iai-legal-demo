@@ -1,9 +1,9 @@
--- Neon / PostgreSQL schema for iai-legal-demo
+-- PostgreSQL + pgvector schema for probonoai
 -- Run once: psql $DATABASE_URL < schema.sql
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Case timeline events (demo data)
+-- Case timeline events
 CREATE TABLE IF NOT EXISTS demo_case_events (
     id           SERIAL PRIMARY KEY,
     case_id      TEXT NOT NULL,
@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS demo_case_events_case_id_idx ON demo_case_events (cas
 CREATE INDEX IF NOT EXISTS demo_case_events_embedding_idx ON demo_case_events
     USING hnsw (embedding vector_cosine_ops);
 
--- Legislation chunks (demo subset)
+-- Legislation chunks
 CREATE TABLE IF NOT EXISTS legislation_chunks (
     id           SERIAL PRIMARY KEY,
     citation     TEXT,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS legislation_chunks (
 CREATE INDEX IF NOT EXISTS legislation_chunks_embedding_idx ON legislation_chunks
     USING hnsw (embedding vector_cosine_ops);
 
--- Caselaw chunks (demo subset)
+-- Caselaw chunks
 CREATE TABLE IF NOT EXISTS caselaw_chunks (
     id               SERIAL PRIMARY KEY,
     neutral_citation TEXT,

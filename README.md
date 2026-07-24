@@ -1,8 +1,8 @@
 # ProBono AI — Legal Intelligence Platform
 
-Semantic search and RAG-powered Q&A over NSW legislation and caselaw, built as a production demo for [probonoai.com.au](https://probonoai.com.au).
+Semantic search and RAG-powered Q&A over NSW legislation and caselaw, powering [probonoai.com.au](https://probonoai.com.au).
 
-**Live demo →** [probonoai.com.au](https://probonoai.com.au) · login: `demo` / `demo`
+**Live →** [probonoai.com.au](https://probonoai.com.au) · guest login: `demo` / `demo1234`
 
 ---
 

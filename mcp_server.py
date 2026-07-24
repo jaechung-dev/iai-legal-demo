@@ -133,7 +133,7 @@ def collections() -> str:
         "Available collections:\n"
         "- legislation  : 114,920 NSW legislation chunks (OALC corpus, text-embedding-3-small)\n"
         "- caselaw      : 66,547 NSW caselaw paragraph chunks\n"
-        "- case_events  : Demo case event timeline (R v Nguyen)\n"
+        "- case_events  : Case event timeline (R v Nguyen)\n"
         f"Model: {r.json().get('model', 'unknown')}"
     )
 

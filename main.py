@@ -1,6 +1,5 @@
 """
-Legal Intelligence Demo API
-Port 9300
+Legal Intelligence API
 """
 import os
 import re, json, asyncio, secrets, hashlib
@@ -40,12 +39,12 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:3131")
 BACKEND_URL          = os.getenv("BACKEND_URL", "http://localhost:20000")
 
-DEMO_USERS = {
-    "demo":  {"password": "demo1234",                                "name": "Demo User", "role": "user"},
-    "admin": {"password": os.getenv("ADMIN_PASSWORD", "admin1234"), "name": "Admin",     "role": "admin"},
+SEED_USERS = {
+    "demo":  {"password": "demo1234",                                "name": "Guest",  "role": "user"},
+    "admin": {"password": os.getenv("ADMIN_PASSWORD", "admin1234"), "name": "Admin",  "role": "admin"},
 }
 
-# In-memory user store for demo registrations {username: {name, email, password_hash, salt, role}}
+# In-memory user store for registered users {username: {name, email, password_hash, salt, role}}
 REGISTERED_USERS: dict = {}
 # In-memory OAuth state tokens for CSRF protection
 OAUTH_STATES: dict = {}
@@ -61,7 +60,7 @@ CHAT_MODEL  = os.getenv("CHAT_MODEL",  "gpt-4o-mini")
 
 # ── embeddings / LLM ─────────────────────────────────────────────────────────
 # Switch provider by setting CHAT_MODEL in .env:
-#   gpt-4o-mini          → OpenAI  (cheap, good for demos)
+#   gpt-4o-mini          → OpenAI
 #   claude-haiku-4-5     → Anthropic
 
 embedder = OpenAIEmbeddings(model=EMBED_MODEL)
@@ -191,7 +190,7 @@ def strip_think(text: str) -> str:
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Legal Intelligence Demo", version="1.0")
+app = FastAPI(title="Legal Intelligence", version="1.0")
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -276,16 +275,16 @@ def _make_jwt(sub: str, name: str, role: str, scopes: list[str], hours: int = 24
 @app.post("/auth/login")
 def login(req: LoginRequest):
     key = req.username.lower().strip()
-    # Check demo users (plain-text passwords)
-    demo = DEMO_USERS.get(req.username)
-    if demo and demo["password"] == req.password:
-        token = _make_jwt(req.username, demo["name"], demo["role"],
+    # Check seed users (plain-text passwords)
+    seed = SEED_USERS.get(req.username)
+    if seed and seed["password"] == req.password:
+        token = _make_jwt(req.username, seed["name"], seed["role"],
                           ["search", "ask", "chat", "timeline"])
         return {
             "access_token": token,
             "token_type":   "bearer",
             "expires_in":   86400,
-            "user": {"username": req.username, "name": demo["name"], "role": demo["role"]},
+            "user": {"username": req.username, "name": seed["name"], "role": seed["role"]},
         }
     # Check registered users (hashed passwords)
     reg = REGISTERED_USERS.get(key)
@@ -304,7 +303,7 @@ def login(req: LoginRequest):
 def oauth_token(req: OAuthTokenRequest):
     """MCP / Custom GPT OAuth token exchange — API key → scoped JWT."""
     valid_keys = json.loads(os.getenv("MCP_API_KEYS", "[]"))
-    if req.api_key not in valid_keys and req.api_key != os.getenv("MCP_DEMO_KEY", "lrag-demo"):
+    if req.api_key not in valid_keys and req.api_key != os.getenv("MCP_KEY", "lrag-demo"):
         raise HTTPException(status_code=401, detail="Invalid API key")
     token = _make_jwt("mcp-client", "MCP Client", "user", req.scopes, hours=1)
     return {
@@ -323,7 +322,7 @@ class RegisterRequest(BaseModel):
 @app.post("/auth/register")
 def register(req: RegisterRequest):
     username = req.email.lower().strip()
-    if username in DEMO_USERS or username in REGISTERED_USERS:
+    if username in SEED_USERS or username in REGISTERED_USERS:
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     if len(req.password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
@@ -389,7 +388,7 @@ async def google_callback(code: str = Query(...), state: str = Query(...)):
 
     email = userinfo.get("email", "").lower()
     name  = userinfo.get("name", email)
-    if email not in REGISTERED_USERS and email not in DEMO_USERS:
+    if email not in REGISTERED_USERS and email not in SEED_USERS:
         salt = secrets.token_hex(16)
         REGISTERED_USERS[email] = {
             "name": name, "email": email,

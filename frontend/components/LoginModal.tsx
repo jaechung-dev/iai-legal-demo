@@ -127,13 +127,13 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
 
           <div className="relative flex items-center gap-3">
             <div className="flex-1 border-t border-gray-200" />
-            <span className="text-xs text-gray-400 font-medium">Demo accounts</span>
+            <span className="text-xs text-gray-400 font-medium">Guest accounts</span>
             <div className="flex-1 border-t border-gray-200" />
           </div>
 
           <div className="space-y-2">
             {[
-              { label: 'Demo User', sub: 'Guest access', u: 'demo', p: 'demo1234' },
+              { label: 'Guest', sub: 'Guest access', u: 'demo', p: 'demo1234' },
             ].map(({ label, sub, u, p }) => (
               <button
                 key={u}
