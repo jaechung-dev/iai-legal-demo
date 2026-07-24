@@ -3,4 +3,4 @@ export const APP_URL     = process.env.NEXT_PUBLIC_APP_URL     || 'http://localh
 export const MCP_URL     = process.env.NEXT_PUBLIC_MCP_URL     || 'https://api.probonoai.com.au/mcp'
 export const APP_NAME    = process.env.NEXT_PUBLIC_APP_NAME    || 'ProBono AI'
 export const APP_DOMAIN  = process.env.NEXT_PUBLIC_APP_DOMAIN  || 'probonoai.com.au'
-export const DEMO_CASE   = process.env.NEXT_PUBLIC_DEMO_CASE   || 'R v Nguyen [2025]'
+export const FEATURED_CASE = process.env.NEXT_PUBLIC_FEATURED_CASE || 'R v Nguyen [2025]'

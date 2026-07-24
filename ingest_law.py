@@ -1,12 +1,12 @@
 """
-Ingest a subset of legislation or caselaw chunks from a JSONL export.
+Ingest legislation or caselaw chunks from a JSONL or CSV export.
 Usage:
-  python ingest_law.py legislation  demo_data/legislation_demo.jsonl
-  python ingest_law.py caselaw      demo_data/caselaw_demo.jsonl
+  python ingest_law.py legislation  data/legislation.jsonl
+  python ingest_law.py caselaw      data/caselaw.jsonl
 
-Export from server (run on gom@192.168.0.28):
-  # Legislation — fraud/criminal/legal profession acts, 500 chunks
-  psql -d bella_legal -c "COPY (
+Export from an existing Postgres DB (DATABASE_URL must be set):
+  # Legislation — specific acts, up to 500 chunks
+  psql $DATABASE_URL -c "COPY (
     SELECT citation, jurisdiction, text FROM legislation_chunks
     WHERE embedding IS NOT NULL
       AND (citation ILIKE '%Crimes Act%'
@@ -15,16 +15,14 @@ Export from server (run on gom@192.168.0.28):
         OR citation ILIKE '%Evidence Act%'
         OR citation ILIKE '%Civil Liability%')
     ORDER BY random() LIMIT 500
-  ) TO STDOUT WITH CSV HEADER" > legislation_demo.csv
+  ) TO STDOUT WITH CSV HEADER" > legislation.csv
 
-  # Caselaw — 300 chunks
-  psql -d bella_legal -c "COPY (
+  # Caselaw — random sample
+  psql $DATABASE_URL -c "COPY (
     SELECT neutral_citation, title, text FROM caselaw_chunks
     WHERE embedding IS NOT NULL
     ORDER BY random() LIMIT 300
-  ) TO STDOUT WITH CSV HEADER" > caselaw_demo.csv
-
-Then convert CSV to JSONL and scp here, or use the --csv flag below.
+  ) TO STDOUT WITH CSV HEADER" > caselaw.csv
 """
 import os, sys, json, csv
 import psycopg2

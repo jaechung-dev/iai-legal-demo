@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Scale, MessageSquare, Search, Plug, LogOut, Menu, X, ClipboardList } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/auth'
-import { APP_NAME, DEMO_CASE } from '@/lib/config'
+import { APP_NAME, FEATURED_CASE } from '@/lib/config'
 
 const LINKS = [
   { href: '/chat/',    label: 'Chat',    Icon: MessageSquare },
@@ -58,7 +58,7 @@ export default function Nav() {
         {/* Desktop right side */}
         <div className="hidden md:flex items-center gap-4 shrink-0 ml-auto">
           <span className="text-xs text-zinc-600 hidden lg:block px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800">
-            {DEMO_CASE}
+            {FEATURED_CASE}
           </span>
           {user ? (
             <div className="flex items-center gap-2">
@@ -111,7 +111,7 @@ export default function Nav() {
       {mobileOpen && (
         <div className="md:hidden border-t border-zinc-800 bg-zinc-950 px-4 py-3 space-y-1">
           <div className="flex items-center justify-between py-2 border-b border-zinc-800 mb-2">
-            <span className="text-xs text-zinc-500 font-mono">{DEMO_CASE}</span>
+            <span className="text-xs text-zinc-500 font-mono">{FEATURED_CASE}</span>
             {user ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-zinc-400">{user.name}</span>

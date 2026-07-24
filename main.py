@@ -2,7 +2,7 @@
 Legal Intelligence API
 """
 import os
-import re, json, asyncio, secrets, hashlib
+import re, json, asyncio, secrets, hashlib, random
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from dotenv import load_dotenv
@@ -347,6 +347,14 @@ def _email_verify(to: str, name: str, token: str):
         f'<p style="color:#6b7280;font-size:13px">Link expires in 24 hours. If you didn\'t create an account, ignore this email.</p>',
         f"Verify your email: {link}")
 
+def _email_otp(to: str, name: str, code: str):
+    _send_email(to, f"Your {APP_NAME} verification code",
+        f'<p>Hi {name},</p>'
+        f'<p>Your email verification code is:</p>'
+        f'<p style="font-size:40px;font-weight:700;letter-spacing:10px;color:#10b981;font-family:monospace">{code}</p>'
+        f'<p style="color:#6b7280;font-size:13px">Expires in 15 minutes. If you didn\'t sign up, ignore this email.</p>',
+        f"Your verification code: {code}  (expires in 15 minutes)")
+
 def _email_reset(to: str, name: str, token: str):
     link = f"{FRONTEND_URL}/reset-password/?token={token}"
     _send_email(to, "Reset your ProBono AI password",
@@ -390,6 +398,10 @@ class EmailRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     password: str
+
+class OTPVerifyRequest(BaseModel):
+    email: str
+    code: str
 
 class OAuthTokenRequest(BaseModel):
     api_key: str
@@ -443,14 +455,14 @@ def auth_register(req: RegisterRequest):
             (user_id, email, req.name.strip(), _hash_password(req.password, salt), salt),
         )
 
-    vtok = secrets.token_urlsafe(32)
-    vexp = datetime.now(timezone.utc) + timedelta(hours=24)
+    code = str(random.randint(100000, 999999))
+    vexp = datetime.now(timezone.utc) + timedelta(minutes=15)
     with _db() as conn:
         conn.cursor().execute(
             "INSERT INTO email_verifications (user_id,token_hash,expires_at) VALUES (%s,%s,%s)",
-            (user_id, _h(vtok), vexp),
+            (user_id, _h(code), vexp),
         )
-    _email_verify(email, req.name.strip(), vtok)
+    _email_otp(email, req.name.strip(), code)
 
     tokens = _issue(user_id, email, req.name.strip(), "user", email_verified=False)
     tokens["user"] = {"username": email, "name": req.name.strip(),
@@ -544,6 +556,28 @@ def auth_verify_email(token: str = Query(...)):
     return RedirectResponse(f"{FRONTEND_URL}/login/?verified=1")
 
 
+@app.post("/auth/verify-otp")
+def auth_verify_otp(req: OTPVerifyRequest):
+    email = req.email.lower().strip()
+    user  = _db_user(email)
+    if not user:
+        raise HTTPException(400, "Invalid or expired code")
+    code_hash = _h(req.code.strip())
+    with _db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM email_verifications "
+            "WHERE user_id=%s AND token_hash=%s AND expires_at>NOW() AND used=false",
+            (user["id"], code_hash),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(400, "Invalid or expired code")
+        cur.execute("UPDATE email_verifications SET used=true WHERE id=%s", (row[0],))
+        cur.execute("UPDATE users SET email_verified=true WHERE id=%s", (user["id"],))
+    return {"ok": True}
+
+
 @app.post("/auth/resend-verification")
 def auth_resend_verification(req: EmailRequest):
     email = req.email.lower().strip()
@@ -555,14 +589,14 @@ def auth_resend_verification(req: EmailRequest):
             "UPDATE email_verifications SET used=true WHERE user_id=%s AND used=false",
             (user["id"],)
         )
-    vtok = secrets.token_urlsafe(32)
-    vexp = datetime.now(timezone.utc) + timedelta(hours=24)
+    code = str(random.randint(100000, 999999))
+    vexp = datetime.now(timezone.utc) + timedelta(minutes=15)
     with _db() as conn:
         conn.cursor().execute(
             "INSERT INTO email_verifications (user_id,token_hash,expires_at) VALUES (%s,%s,%s)",
-            (user["id"], _h(vtok), vexp),
+            (user["id"], _h(code), vexp),
         )
-    _email_verify(email, user["name"], vtok)
+    _email_otp(email, user["name"], code)
     return {"ok": True}
 
 

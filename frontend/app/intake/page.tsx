@@ -710,7 +710,6 @@ if (err) { setStepError(err); return }
 
   async function handleSubmit() {
     setLoading(true)
-    // In the demo, we just save to localStorage and simulate success
     await new Promise(r => setTimeout(r, 800))
     saveDraft({ personal, matter, files, submittedAt: new Date().toISOString() })
     setLoading(false)

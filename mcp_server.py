@@ -158,11 +158,22 @@ def collections() -> str:
     """List available data collections and their sizes."""
     r = requests.get(f"{RAG_URL}/health", timeout=10)
     r.raise_for_status()
+    try:
+        with _db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM legislation_chunks")
+            leg_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM caselaw_chunks")
+            case_count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(DISTINCT case_id) FROM case_events")
+            event_cases = cur.fetchone()[0]
+    except Exception:
+        leg_count = case_count = event_cases = "unknown"
     return (
         "Available collections:\n"
-        "- legislation  : 114,920 NSW legislation chunks (OALC corpus, text-embedding-3-small)\n"
-        "- caselaw      : 66,547 NSW caselaw paragraph chunks\n"
-        "- case_events  : Case event timeline (R v Nguyen)\n"
+        f"- legislation  : {leg_count:,} NSW legislation chunks (OALC corpus, text-embedding-3-small)\n"
+        f"- caselaw      : {case_count:,} NSW caselaw paragraph chunks\n"
+        f"- case_events  : Case event timelines ({event_cases} case(s))\n"
         f"Model: {r.json().get('model', 'unknown')}"
     )
 
@@ -179,4 +190,4 @@ app = CORSMiddleware(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("mcp_server:app", host="0.0.0.0", port=20002)
+    uvicorn.run("mcp_server:app", host="0.0.0.0", port=int(os.getenv("MCP_PORT", "20002")))
