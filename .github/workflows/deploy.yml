@@ -3,20 +3,37 @@ name: Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'main.py'
+              - 'requirements.txt'
+              - 'auth.py'
+              - 'mcp_server.py'
+            frontend:
+              - 'frontend/**'
+
   deploy-backend:
     name: Deploy Lambda
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    if: |
-      contains(toJson(github.event.commits.*.modified + github.event.commits.*.added), 'main.py') ||
-      contains(toJson(github.event.commits.*.modified + github.event.commits.*.added), 'requirements.txt') ||
-      contains(toJson(github.event.commits.*.modified + github.event.commits.*.added), 'auth.py') ||
-      contains(toJson(github.event.commits.*.modified + github.event.commits.*.added), 'mcp_server.py')
     steps:
       - uses: actions/checkout@v4
 
@@ -42,9 +59,9 @@ jobs:
 
   deploy-frontend:
     name: Deploy Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    if: |
-      contains(toJson(github.event.commits.*.modified + github.event.commits.*.added), 'frontend/')
     steps:
       - uses: actions/checkout@v4
 
