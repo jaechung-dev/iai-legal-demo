@@ -109,10 +109,10 @@ test('reset password page with no token shows invalid link error', async ({ page
 
 test('reset password page with bad token shows error after submit', async ({ page }) => {
   await page.goto('/reset-password?token=badtoken123')
-  await expect(page.getByPlaceholder(/new password/i)).toBeVisible()
-  await page.getByPlaceholder(/new password/i).fill('NewPass123!')
-  await page.locator('input[type="password"]').last().fill('NewPass123!')
-  await page.getByRole('button', { name: /reset password/i }).click()
+  await expect(page.getByPlaceholder(/min.*8 characters/i)).toBeVisible({ timeout: 5000 })
+  await page.getByPlaceholder(/min.*8 characters/i).fill('NewPass123!')
+  await page.getByPlaceholder(/repeat your password/i).fill('NewPass123!')
+  await page.getByRole('button', { name: /set new password/i }).click()
   await expect(page.getByText(/invalid|expired/i)).toBeVisible({ timeout: 5000 })
 })
 
