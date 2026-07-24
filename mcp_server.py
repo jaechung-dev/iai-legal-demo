@@ -1,29 +1,46 @@
 """
 Legal RAG MCP Server — port 20002
 
-Auth: Bearer JWT issued by probonoai.com.au /auth/login.
-      Every request must carry:  Authorization: Bearer <jwt>
-      Tokens are validated against the same JWT_SECRET as the main API.
+Auth: opaque MCP token issued by probonoai.com.au/connect.
+      Every request must carry:  Authorization: Bearer mcp-<token>
+      Token is validated against the mcp_tokens table (DB lookup, not JWT).
 """
-import os, json, requests
+import os, json, hashlib, requests
+import psycopg2
+from contextlib import contextmanager
 from dotenv import load_dotenv
 load_dotenv()
+
 from mcp.server.fastmcp import FastMCP
-from jose import jwt as jose_jwt, JWTError
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-production-use-long-random-string")
-JWT_ALG    = "HS256"
-RAG_URL    = os.getenv("RAG_URL", "http://127.0.0.1:20000")
+DSN     = os.getenv("DATABASE_URL", "")
+RAG_URL = os.getenv("RAG_URL", "http://127.0.0.1:20000")
 
-# Paths that don't require auth (MCP negotiation)
 _PUBLIC = {"/"}
 
 
-class JWTAuthMiddleware(BaseHTTPMiddleware):
+@contextmanager
+def _db():
+    conn = psycopg2.connect(DSN)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _h(s: str) -> str:
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+class MCPAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.url.path in _PUBLIC:
             return await call_next(request)
@@ -31,20 +48,32 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
             return JSONResponse(
-                {"error": "Missing Authorization header. Login at probonoai.com.au to get a token."},
+                {"error": "Missing Authorization header. Get an MCP token at probonoai.com.au/connect"},
                 status_code=401,
             )
-        token = auth[len("Bearer "):]
+
+        raw = auth[len("Bearer "):]
         try:
-            claims = jose_jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-        except JWTError:
-            return JSONResponse({"error": "Invalid or expired token."}, status_code=401)
+            with _db() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE mcp_tokens SET last_used_at=NOW() "
+                    "WHERE token_hash=%s AND expires_at>NOW() "
+                    "RETURNING id, user_id",
+                    (_h(raw),),
+                )
+                row = cur.fetchone()
+        except Exception:
+            return JSONResponse({"error": "Token validation failed"}, status_code=500)
 
-        scopes = claims.get("scopes", [])
-        if not scopes:
-            return JSONResponse({"error": "Token has no scopes."}, status_code=403)
+        if not row:
+            return JSONResponse(
+                {"error": "Invalid or expired MCP token. Get a new one at probonoai.com.au/connect"},
+                status_code=401,
+            )
 
-        request.state.claims = claims
+        request.state.mcp_token_id = str(row[0])
+        request.state.user_id      = str(row[1])
         return await call_next(request)
 
 
@@ -140,9 +169,8 @@ def collections() -> str:
 
 _mcp_app = mcp.streamable_http_app()
 
-# Middleware applied outer-to-inner: CORS → JWT → MCP
 app = CORSMiddleware(
-    JWTAuthMiddleware(_mcp_app),
+    MCPAuthMiddleware(_mcp_app),
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*", "Authorization"],

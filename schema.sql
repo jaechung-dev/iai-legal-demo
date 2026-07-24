@@ -41,3 +41,63 @@ CREATE TABLE IF NOT EXISTS caselaw_chunks (
 );
 CREATE INDEX IF NOT EXISTS caselaw_chunks_embedding_idx ON caselaw_chunks
     USING hnsw (embedding vector_cosine_ops);
+
+-- ── Auth tables ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS users (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email          TEXT UNIQUE NOT NULL,
+    name           TEXT NOT NULL,
+    password_hash  TEXT,
+    salt           TEXT,
+    role           TEXT NOT NULL DEFAULT 'user',
+    provider       TEXT NOT NULL DEFAULT 'local',
+    email_verified BOOLEAN NOT NULL DEFAULT false,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS refresh_tokens_hash_idx    ON refresh_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS refresh_tokens_user_idx    ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS refresh_tokens_expires_idx ON refresh_tokens(expires_at);
+
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used        BOOLEAN NOT NULL DEFAULT false,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash  TEXT NOT NULL UNIQUE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used        BOOLEAN NOT NULL DEFAULT false,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── MCP tokens ────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS mcp_tokens (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash   TEXT NOT NULL UNIQUE,
+    name         TEXT NOT NULL DEFAULT 'My MCP Token',
+    scopes       TEXT[] NOT NULL DEFAULT ARRAY['search','ask','fetch','collections'],
+    expires_at   TIMESTAMPTZ NOT NULL,
+    last_used_at TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS mcp_tokens_hash_idx    ON mcp_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS mcp_tokens_user_idx    ON mcp_tokens(user_id);
+CREATE INDEX IF NOT EXISTS mcp_tokens_expires_idx ON mcp_tokens(expires_at);

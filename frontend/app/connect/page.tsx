@@ -1,67 +1,120 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
-import { Separator } from '@/components/ui/separator'
-import { Copy, Check, ChevronRight } from 'lucide-react'
+import { Copy, Check, Plus, Trash2, Clock, Plug } from 'lucide-react'
+import { useAuth } from '@/context/auth'
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
 
-const SCOPES = [
-  { id: 'search',   label: 'Search',   desc: 'Semantic search over NSW legislation and caselaw' },
-  { id: 'ask',      label: 'Ask',      desc: 'RAG-powered Q&A with source citations' },
-  { id: 'chat',     label: 'Chat',     desc: 'Multi-turn conversation with legal context' },
-  { id: 'timeline', label: 'Timeline', desc: 'Read case event timeline' },
-]
+type MCPToken = {
+  id: string
+  name: string
+  scopes: string[]
+  expires_at: string
+  last_used_at: string | null
+  created_at: string
+}
 
-const STEPS = [
-  { n: '1', text: 'Enter your API key below' },
-  { n: '2', text: 'Select the scopes you want to grant' },
-  { n: '3', text: 'Click Authorize — get a short-lived JWT (1h)' },
-  { n: '4', text: 'Paste the token into your Claude MCP settings or Custom GPT action header' },
-]
+function timeAgo(iso: string | null): string {
+  if (!iso) return 'Never'
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1)  return 'Just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+}
 
 export default function ConnectPage() {
-  const [apiKey, setApiKey]         = useState('')
-  const [selectedScopes, setScopes] = useState(['search', 'ask', 'chat'])
-  const [token, setToken]           = useState('')
-  const [error, setError]           = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [copied, setCopied]         = useState(false)
+  const { user, token } = useAuth()
+  const router = useRouter()
 
-  function toggleScope(id: string) {
-    setScopes(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    )
-  }
+  const [tokens, setTokens]       = useState<MCPToken[]>([])
+  const [newName, setNewName]      = useState('')
+  const [creating, setCreating]    = useState(false)
+  const [newToken, setNewToken]    = useState<string | null>(null)
+  const [copied, setCopied]        = useState(false)
+  const [copiedCfg, setCopiedCfg] = useState(false)
+  const [revoking, setRevoking]    = useState<string | null>(null)
+  const [error, setError]          = useState('')
 
-  async function handleAuthorize() {
-    if (!apiKey.trim()) return
-    setError(''); setToken(''); setLoading(true)
+  const loadTokens = useCallback(async () => {
+    if (!token) return
     try {
-      const r = await fetch(`${API}/auth/oauth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: apiKey, scopes: selectedScopes }),
+      const r = await fetch(`${API}/auth/mcp/tokens`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      if (!r.ok) {
-        const e = await r.json()
-        throw new Error(e.detail || 'Authorization failed')
-      }
+      if (r.ok) setTokens((await r.json()).tokens)
+    } catch {}
+  }, [token])
+
+  useEffect(() => {
+    if (!user) { router.replace('/login/'); return }
+    loadTokens()
+  }, [user, router, loadTokens])
+
+  async function createToken() {
+    if (!token) return
+    setCreating(true); setError(''); setNewToken(null)
+    try {
+      const r = await fetch(`${API}/auth/mcp/token`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ name: newName.trim() || 'My MCP Token', expires_days: 365 }),
+      })
+      if (!r.ok) throw new Error((await r.json()).detail || 'Failed to create token')
       const data = await r.json()
-      setToken(data.access_token)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Authorization failed')
+      setNewToken(data.token)
+      setNewName('')
+      await loadTokens()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to create token')
     } finally {
-      setLoading(false)
+      setCreating(false)
     }
   }
 
-  function copy() {
-    navigator.clipboard.writeText(token)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  async function revokeToken(id: string) {
+    if (!token) return
+    setRevoking(id)
+    try {
+      await fetch(`${API}/auth/mcp/token/${id}`, {
+        method:  'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setTokens(prev => prev.filter(t => t.id !== id))
+    } catch {}
+    finally { setRevoking(null) }
   }
+
+  function copy(text: string, which: 'token' | 'cfg') {
+    navigator.clipboard.writeText(text)
+    if (which === 'token') { setCopied(true);    setTimeout(() => setCopied(false),    2000) }
+    else                   { setCopiedCfg(true); setTimeout(() => setCopiedCfg(false), 2000) }
+  }
+
+  const cfgSnippet = (t: string) => JSON.stringify({
+    mcpServers: {
+      'legal-rag': {
+        command: 'npx',
+        args: [
+          'mcp-remote',
+          'https://api.probonoai.com.au/mcp',
+          '--header',
+          `Authorization: Bearer ${t}`,
+        ],
+      },
+    },
+  }, null, 2)
+
+  if (!user) return null
 
   return (
     <>
@@ -71,149 +124,135 @@ export default function ConnectPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Connect an AI client</h1>
           <p className="text-sm text-gray-500 mt-1.5">
-            Issue a scoped JWT token to connect Claude, a Custom GPT, or any MCP-compatible client
-            to this Legal Intelligence Platform.
+            Generate a long-lived MCP token to connect Claude Desktop or any MCP-compatible client.
+            Tokens are tied to your account and can be revoked at any time.
           </p>
         </div>
 
-        {/* How it works */}
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-50 bg-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">How it works</p>
+        {/* Create token */}
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+            <Plus className="w-4 h-4 text-gray-500" />
+            <p className="text-sm font-semibold text-gray-700">Create new token</p>
           </div>
-          <div className="p-5 space-y-4">
-            {STEPS.map(({ n, text }) => (
-              <div key={n} className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-gray-900 text-white text-xs flex items-center justify-center shrink-0 font-medium">
-                  {n}
-                </span>
-                <p className="text-sm text-gray-600 pt-0.5">{text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Scope selection */}
-        <div className="space-y-3">
-          <p className="text-sm font-semibold text-gray-700">Requested scopes</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {SCOPES.map(({ id, label, desc }) => {
-              const active = selectedScopes.includes(id)
-              return (
-                <button
-                  key={id}
-                  onClick={() => toggleScope(id)}
-                  className={`text-left border rounded-xl p-4 transition-all ${
-                    active
-                      ? 'border-emerald-200 bg-emerald-50/50 shadow-sm'
-                      : 'border-gray-200 bg-white hover:border-gray-300 shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-sm font-semibold ${active ? 'text-gray-900' : 'text-gray-700'}`}>
-                      {label}
-                    </span>
-                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      active ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'
-                    }`}>
-                      {active && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-400 leading-snug">{desc}</p>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* API key input */}
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-gray-700">API key</label>
-          <div className="flex gap-2 flex-col sm:flex-row">
-            <input
-              className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm placeholder:text-gray-400"
-              placeholder="lrag-xxxxxxxxxxxx"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-            />
-            <button
-              onClick={handleAuthorize}
-              disabled={loading || !apiKey.trim()}
-              className="bg-gray-900 hover:bg-gray-800 text-white rounded-xl px-6 py-3 text-sm font-medium transition-all disabled:opacity-50 shadow-sm flex items-center gap-2 justify-center"
-            >
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Authorizing
-                </>
-              ) : (
-                <>Authorize <ChevronRight className="w-4 h-4" /></>
-              )}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400">
-            Use <code className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-md font-mono">lrag-demo</code> to try with the demo key.
-          </p>
-          {error && (
-            <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
-              {error}
+          <div className="p-5 space-y-3">
+            <div className="flex gap-2">
+              <input
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm placeholder:text-gray-400"
+                placeholder="Token name (e.g. My Claude Desktop)"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createToken()}
+              />
+              <button
+                onClick={createToken}
+                disabled={creating}
+                className="bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl px-5 py-2.5 text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm shrink-0"
+              >
+                {creating
+                  ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <><Plug className="w-3.5 h-3.5" />Generate</>
+                }
+              </button>
             </div>
-          )}
+            {error && (
+              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>
+            )}
+            <p className="text-xs text-gray-400">Token expires in 1 year. You can revoke it at any time.</p>
+          </div>
         </div>
 
-        {/* Token output */}
-        {token && (
-          <div className="space-y-4 pt-2">
-            <Separator className="bg-gray-100" />
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-gray-700">Access token</p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full px-2.5 py-1 font-medium">
-                  Expires in 1h
-                </span>
+        {/* New token reveal — shown once */}
+        {newToken && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-emerald-100 flex items-center justify-between">
+              <p className="text-sm font-semibold text-emerald-800">Token created — copy it now</p>
+              <span className="text-xs text-emerald-600 bg-emerald-100 rounded-full px-2.5 py-1">
+                Shown once only
+              </span>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 flex items-start justify-between gap-3">
+                <p className="text-xs font-mono text-emerald-400 break-all leading-relaxed">{newToken}</p>
                 <button
-                  onClick={copy}
-                  className="flex items-center gap-1.5 text-xs border border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-all bg-white shadow-sm"
+                  onClick={() => copy(newToken, 'token')}
+                  className="shrink-0 flex items-center gap-1.5 text-xs border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 rounded-lg px-3 py-1.5 transition-all"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-            </div>
-            <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800">
-              <p className="text-xs font-mono text-emerald-400 break-all leading-relaxed">{token}</p>
-            </div>
 
-            {/* MCP instructions */}
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-              <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-100">
-                <p className="text-xs font-semibold text-gray-600">Using with Claude MCP</p>
-              </div>
-              <div className="p-5 space-y-3">
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  Add this server to your Claude MCP config and set{' '}
-                  <code className="bg-gray-100 text-gray-600 px-1 py-0.5 rounded font-mono">MCP_DEFAULT_JWT</code> to the token above.
-                  Claude can then call{' '}
-                  <code className="bg-gray-100 text-gray-600 px-1 py-0.5 rounded font-mono">search</code>,{' '}
-                  <code className="bg-gray-100 text-gray-600 px-1 py-0.5 rounded font-mono">ask</code>, and{' '}
-                  <code className="bg-gray-100 text-gray-600 px-1 py-0.5 rounded font-mono">chat</code> as native tools.
-                </p>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-600">Claude Desktop config</p>
+                  <button
+                    onClick={() => copy(cfgSnippet(newToken), 'cfg')}
+                    className="flex items-center gap-1.5 text-xs border border-gray-200 text-gray-500 hover:text-gray-800 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-all bg-white"
+                  >
+                    {copiedCfg ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCfg ? 'Copied!' : 'Copy config'}
+                  </button>
+                </div>
                 <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800">
-                  <pre className="text-xs text-zinc-300 leading-relaxed overflow-x-auto">{`{
-  "mcpServers": {
-    "legal-rag": {
-      "url": "${API}/mcp",
-      "env": {
-        "MCP_DEFAULT_JWT": "<paste token>"
-      }
-    }
-  }
-}`}</pre>
+                  <pre className="text-xs text-zinc-300 leading-relaxed overflow-x-auto">{cfgSnippet(newToken)}</pre>
                 </div>
               </div>
             </div>
           </div>
         )}
+
+        {/* Token list */}
+        {tokens.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+              <p className="text-sm font-semibold text-gray-700">
+                Active tokens <span className="text-gray-400 font-normal">({tokens.length})</span>
+              </p>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {tokens.map(t => (
+                <div key={t.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{t.name}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="flex items-center gap-1 text-xs text-gray-400">
+                        <Clock className="w-3 h-3" />
+                        Last used: {timeAgo(t.last_used_at)}
+                      </span>
+                      <span className="text-xs text-gray-300">·</span>
+                      <span className="text-xs text-gray-400">Expires {formatDate(t.expires_at)}</span>
+                    </div>
+                    <div className="flex gap-1 mt-1.5 flex-wrap">
+                      {t.scopes.map(s => (
+                        <span key={s} className="text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => revokeToken(t.id)}
+                    disabled={revoking === t.id}
+                    title="Revoke token"
+                    className="shrink-0 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                  >
+                    {revoking === t.id
+                      ? <span className="w-4 h-4 border-2 border-gray-300 border-t-red-400 rounded-full animate-spin block" />
+                      : <Trash2 className="w-4 h-4" />
+                    }
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tokens.length === 0 && !newToken && (
+          <div className="text-center py-12 text-gray-400">
+            <Plug className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">No active tokens. Create one above.</p>
+          </div>
+        )}
+
       </main>
     </>
   )
