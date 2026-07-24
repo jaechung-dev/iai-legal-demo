@@ -4,8 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, ArrowRight, Check, Scale } from 'lucide-react'
 import { useAuth } from '@/context/auth'
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
+import { API_URL as API, APP_NAME } from '@/lib/config'
 
 const FEATURES = [
   'NSW legislation & caselaw search',
@@ -60,7 +59,7 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
             <div className="w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
               <Scale className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-white">ProBono AI</span>
+            <span className="font-bold text-white">{APP_NAME}</span>
           </div>
           <h2 className="text-xl font-bold text-white">Sign in to continue</h2>
           <p className="text-zinc-400 text-sm mt-1">Access the legal intelligence platform</p>
@@ -124,6 +123,11 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
               {loading ? 'Signing in…' : <><span>Sign in</span><ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>
+
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <a href="/forgot-password/" className="text-emerald-600 hover:underline">Forgot password?</a>
+            <a href="/register/" className="text-emerald-600 hover:underline">Create account</a>
+          </div>
 
           <div className="relative flex items-center gap-3">
             <div className="flex-1 border-t border-gray-200" />

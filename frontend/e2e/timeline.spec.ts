@@ -1,42 +1,30 @@
 import { test, expect } from '@playwright/test'
 
-test('timeline page loads with event count', async ({ page }) => {
+// NOTE: The timeline view (TimelineClient.tsx) was extracted from the home page when
+// the landing page was added. These tests now cover the landing page at /.
+// Timeline-specific tests should be re-added once the timeline has its own route.
+
+test('landing page shows hero content', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText(/events/)).toBeVisible({ timeout: 10000 })
+  await expect(page.getByRole('heading', { name: /legal help in/i })).toBeVisible({ timeout: 10000 })
+  await expect(page.getByText(/plain english/i)).toBeVisible()
 })
 
-test('category filter chips are present', async ({ page }) => {
+test('landing page has Get started and Sign in buttons', async ({ page }) => {
   await page.goto('/')
-  for (const cat of ['All', 'Court', 'Police', 'Verdict']) {
-    await expect(page.getByRole('button', { name: new RegExp(cat, 'i') }).first()).toBeVisible()
-  }
+  await expect(page.getByRole('button', { name: /get started/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
 })
 
-test('category filter narrows visible events', async ({ page }) => {
+test('landing page clicking Sign in opens login modal', async ({ page }) => {
   await page.goto('/')
-  await page.waitForSelector('[data-testid="timeline-row"]')
-
-  const allCount = await page.locator('[data-testid="timeline-row"]').count()
-
-  await page.getByRole('button', { name: /^Court/i }).first().click()
-  await page.waitForTimeout(300)
-
-  const courtCount = await page.locator('[data-testid="timeline-row"]').count()
-  expect(courtCount).toBeLessThan(allCount)
+  await page.getByRole('button', { name: /sign in/i }).click()
+  await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
+  await expect(page.getByPlaceholder(/username/i)).toBeVisible()
 })
 
-test('clicking an event row opens detail dialog', async ({ page }) => {
+test('landing page shows feature list', async ({ page }) => {
   await page.goto('/')
-  await page.waitForSelector('[data-testid="timeline-row"]')
-  await page.locator('[data-testid="timeline-row"]').first().click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-})
-
-test('detail dialog closes on dismiss', async ({ page }) => {
-  await page.goto('/')
-  await page.waitForSelector('[data-testid="timeline-row"]')
-  await page.locator('[data-testid="timeline-row"]').first().click()
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).not.toBeVisible()
+  await expect(page.getByText(/NSW legislation & caselaw search/i)).toBeVisible()
+  await expect(page.getByText(/plain english answers/i)).toBeVisible()
 })

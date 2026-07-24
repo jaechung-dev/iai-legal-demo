@@ -9,8 +9,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import LoginModal from '@/components/LoginModal'
 import { useGuestQuota } from '@/hooks/useGuestQuota'
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
+import { API_URL as API } from '@/lib/config'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 type Source = { citation: string; content: string; score: number; source_type: string }
@@ -88,7 +87,7 @@ export default function ChatPage() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {showGate && <LoginModal onClose={dismissGate} />}
-      <Nav active="chat" />
+      <Nav />
 
       <div className="flex flex-1 min-h-0 relative">
 

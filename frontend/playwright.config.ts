@@ -19,7 +19,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:20001',
+    url: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:20001',
     reuseExistingServer: !process.env.CI,
   },
 })

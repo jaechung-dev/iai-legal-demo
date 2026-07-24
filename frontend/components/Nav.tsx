@@ -2,23 +2,27 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Scale, LayoutList, MessageSquare, Search, Plug, LogOut, Menu, X } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Scale, MessageSquare, Search, Plug, LogOut, Menu, X, ClipboardList } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/auth'
+import { APP_NAME, DEMO_CASE } from '@/lib/config'
 
 const LINKS = [
-  { href: '/',         label: 'Timeline', key: 'timeline', Icon: LayoutList   },
-  { href: '/chat/',    label: 'Chat',     key: 'chat',     Icon: MessageSquare },
-  { href: '/search/',  label: 'Search',   key: 'search',   Icon: Search        },
-  { href: '/connect/', label: 'Connect',  key: 'connect',  Icon: Plug          },
+  { href: '/chat/',    label: 'Chat',    Icon: MessageSquare },
+  { href: '/search/',  label: 'Search',  Icon: Search        },
+  { href: '/intake/',  label: 'My Case', Icon: ClipboardList },
+  { href: '/connect/', label: 'Connect', Icon: Plug          },
 ] as const
 
-type Page = typeof LINKS[number]['key']
+function isActive(href: string, pathname: string) {
+  return pathname === href || pathname.startsWith(href)
+}
 
-export default function Nav({ active }: { active: Page }) {
+export default function Nav() {
   const { user, logout } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -30,17 +34,17 @@ export default function Nav({ active }: { active: Page }) {
           <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
             <Scale className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-white text-sm tracking-tight hidden sm:block">ProBono AI</span>
+          <span className="font-bold text-white text-sm tracking-tight hidden sm:block">{APP_NAME}</span>
         </Link>
 
         {/* Desktop nav links */}
         <nav className="hidden md:flex items-center gap-0.5 flex-1">
-          {LINKS.map(({ href, label, key, Icon }) => (
+          {LINKS.map(({ href, label, Icon }) => (
             <Link
-              key={key}
+              key={href}
               href={href}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                active === key
+                isActive(href, pathname)
                   ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
                   : 'text-zinc-400 hover:text-white hover:bg-white/5'
               }`}
@@ -54,13 +58,13 @@ export default function Nav({ active }: { active: Page }) {
         {/* Desktop right side */}
         <div className="hidden md:flex items-center gap-4 shrink-0 ml-auto">
           <span className="text-xs text-zinc-600 hidden lg:block px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800">
-            R v Nguyen [2025]
+            {DEMO_CASE}
           </span>
           {user ? (
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-zinc-300">{user.name}</span>
               <button
-                onClick={() => { logout(); router.push('/login/') }}
+                onClick={async () => { await logout(); router.push('/login/') }}
                 title="Sign out"
                 className="text-zinc-500 hover:text-white transition-colors p-1.5 rounded-md hover:bg-white/5"
               >
@@ -80,12 +84,12 @@ export default function Nav({ active }: { active: Page }) {
 
         {/* Mobile: icon-only links + hamburger */}
         <div className="flex md:hidden items-center gap-1 ml-auto">
-          {LINKS.map(({ href, key, Icon }) => (
+          {LINKS.map(({ href, Icon }) => (
             <Link
-              key={key}
+              key={href}
               href={href}
               className={`p-2 rounded-md transition-all ${
-                active === key
+                isActive(href, pathname)
                   ? 'bg-emerald-500/10 text-emerald-400'
                   : 'text-zinc-500 hover:text-white hover:bg-white/5'
               }`}
@@ -107,12 +111,12 @@ export default function Nav({ active }: { active: Page }) {
       {mobileOpen && (
         <div className="md:hidden border-t border-zinc-800 bg-zinc-950 px-4 py-3 space-y-1">
           <div className="flex items-center justify-between py-2 border-b border-zinc-800 mb-2">
-            <span className="text-xs text-zinc-500 font-mono">R v Nguyen [2025]</span>
+            <span className="text-xs text-zinc-500 font-mono">{DEMO_CASE}</span>
             {user ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-zinc-400">{user.name}</span>
                 <button
-                  onClick={() => { logout(); router.push('/login/'); setMobileOpen(false) }}
+                  onClick={async () => { await logout(); router.push('/login/'); setMobileOpen(false) }}
                   className="text-zinc-500 hover:text-white p-1"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -128,13 +132,13 @@ export default function Nav({ active }: { active: Page }) {
               </Button>
             )}
           </div>
-          {LINKS.map(({ href, label, key, Icon }) => (
+          {LINKS.map(({ href, label, Icon }) => (
             <Link
-              key={key}
+              key={href}
               href={href}
               onClick={() => setMobileOpen(false)}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                active === key
+                isActive(href, pathname)
                   ? 'bg-emerald-500/10 text-emerald-400'
                   : 'text-zinc-400 hover:text-white hover:bg-white/5'
               }`}

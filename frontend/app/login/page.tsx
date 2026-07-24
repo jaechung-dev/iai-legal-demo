@@ -1,13 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Scale, ArrowRight, Check } from 'lucide-react'
 import { useAuth } from '@/context/auth'
 import { Button } from '@/components/ui/button'
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
+import { API_URL as API, APP_DOMAIN, APP_NAME } from '@/lib/config'
 
 const FEATURES = [
   'NSW legislation & caselaw search',
@@ -15,6 +14,26 @@ const FEATURES = [
   'AI-powered case timeline analysis',
   'Connect Claude via MCP',
 ]
+
+function LoginBanner() {
+  const params = useSearchParams()
+  if (params.get('verified') === '1') return (
+    <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700 font-medium">
+      Email verified! You can now sign in.
+    </div>
+  )
+  if (params.get('reset') === '1') return (
+    <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700 font-medium">
+      Password reset successfully. Please sign in.
+    </div>
+  )
+  if (params.get('error') === 'invalid_link') return (
+    <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
+      That link is invalid or has expired. Please request a new one.
+    </div>
+  )
+  return null
+}
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -55,7 +74,7 @@ export default function LoginPage() {
           <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
             <Scale className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-white text-base tracking-tight">ProBono AI</span>
+          <span className="font-bold text-white text-base tracking-tight">{APP_NAME}</span>
         </div>
 
         <div className="relative space-y-10">
@@ -81,7 +100,7 @@ export default function LoginPage() {
         </div>
 
         <p className="relative text-xs text-zinc-600">
-          probonoai.com.au · Not legal advice
+          {`${APP_DOMAIN} · Not legal advice`}
         </p>
       </div>
 
@@ -89,12 +108,14 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center bg-gray-50 p-6">
         <div className="w-full max-w-sm space-y-7">
 
+          <Suspense fallback={null}><LoginBanner /></Suspense>
+
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5">
             <div className="w-8 h-8 bg-zinc-950 rounded-lg flex items-center justify-center">
               <Scale className="w-4 h-4 text-emerald-400" />
             </div>
-            <span className="font-bold text-gray-900">ProBono AI</span>
+            <span className="font-bold text-gray-900">{APP_NAME}</span>
           </div>
 
           <div>
@@ -131,7 +152,12 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">Password</label>
+                <Link href="/forgot-password/" className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 type="password"
                 className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"

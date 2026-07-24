@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Scale, ArrowRight, Check, Search, MessageSquare, Clock, Plug } from 'lucide-react'
 import { useAuth } from '@/context/auth'
 import LoginModal from '@/components/LoginModal'
-
+import { APP_DOMAIN, APP_NAME } from '@/lib/config'
 const FEATURES = [
   { icon: Search,        text: 'NSW legislation & caselaw search' },
   { icon: MessageSquare, text: 'Plain English answers with citations' },
@@ -51,7 +51,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-zinc-950 rounded-xl flex items-center justify-center">
               <Scale className="w-4 h-4 text-emerald-400" />
             </div>
-            <span className="font-bold text-gray-900 tracking-tight">ProBono AI</span>
+            <span className="font-bold text-gray-900 tracking-tight">{APP_NAME}</span>
           </div>
           <button
             onClick={() => setShowModal(true)}
@@ -106,7 +106,7 @@ export default function LandingPage() {
         </main>
 
         <footer className="text-center py-6 text-xs text-gray-400 border-t border-gray-100">
-          probonoai.com.au · Not legal advice
+          {`${APP_DOMAIN} · Not legal advice`}
         </footer>
       </div>
     </>

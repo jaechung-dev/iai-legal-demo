@@ -7,8 +7,7 @@ import Nav from '@/components/Nav'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import LoginModal from '@/components/LoginModal'
 import { useGuestQuota } from '@/hooks/useGuestQuota'
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
+import { API_URL as API } from '@/lib/config'
 
 type SearchResult = {
   content: string
@@ -87,7 +86,7 @@ export default function SearchPage() {
   return (
     <>
       {showGate && <LoginModal onClose={dismissGate} />}
-      <Nav active="search" />
+      <Nav />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8">
 
         {/* Header */}

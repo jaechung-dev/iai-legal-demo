@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { Copy, Check, Plus, Trash2, Clock, Plug } from 'lucide-react'
 import { useAuth } from '@/context/auth'
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
+import { API_URL as API, MCP_URL } from '@/lib/config'
 
 type MCPToken = {
   id: string
@@ -106,7 +105,7 @@ export default function ConnectPage() {
         command: 'npx',
         args: [
           'mcp-remote',
-          'https://api.probonoai.com.au/mcp',
+          MCP_URL,
           '--header',
           `Authorization: Bearer ${t}`,
         ],
@@ -118,7 +117,7 @@ export default function ConnectPage() {
 
   return (
     <>
-      <Nav active="connect" />
+      <Nav />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-8">
 
         <div>

@@ -10,6 +10,8 @@ frontend/node_modules/
 frontend/.next/
 frontend/.env.local
 frontend/out/
+frontend/e2e/.mcp-token
+frontend/test-results/
 
 # OS
 .DS_Store

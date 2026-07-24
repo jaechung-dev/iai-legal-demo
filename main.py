@@ -38,11 +38,11 @@ JWT_ALG    = "HS256"
 
 GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:3131")
+FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:20001")
 BACKEND_URL          = os.getenv("BACKEND_URL", "http://localhost:20000")
 
 SEED_USERS = {
-    "demo":  {"password": "demo1234",                                "name": "Guest",  "role": "user"},
+    "demo":  {"password": os.getenv("DEMO_PASSWORD", "demo1234"),   "name": "Guest",  "role": "user"},
     "admin": {"password": os.getenv("ADMIN_PASSWORD", "admin1234"), "name": "Admin",  "role": "admin"},
 }
 
@@ -820,7 +820,7 @@ async def ask(req: AskRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=20000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", "20000")), reload=False)
 
 
 # ── Chat endpoint ─────────────────────────────────────────────────────────────
