@@ -65,6 +65,7 @@ export default function SearchPage() {
       await fetchEventSource(`${API}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        openWhenHidden: true,
         body: JSON.stringify({ question: query, source, k: 6 }),
         onmessage(ev) {
           if (ev.data === '[DONE]') return

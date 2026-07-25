@@ -70,6 +70,7 @@ export default function ChatPage() {
       await fetchEventSource(`${API}/chat`, {
         method: 'POST',
         headers: hdrs,
+        openWhenHidden: true,
         body: JSON.stringify({
           question,
           messages: messages.map(m => ({ role: m.role, content: m.content })),
