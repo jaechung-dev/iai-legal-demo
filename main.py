@@ -73,6 +73,34 @@ def _verify_password(password: str, salt: str, stored_hash: str) -> bool:
 EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
 CHAT_MODEL  = os.getenv("CHAT_MODEL",  "gpt-4o-mini")
 
+# ── Audit logging ──────────────────────────────────────────────────────────────
+
+def _write_request_log(endpoint: str, user_id: str, input_data: dict,
+                       output_data: dict, elapsed_ms: int) -> None:
+    """Synchronous DB write — always called via executor so it doesn't block."""
+    try:
+        conn = psycopg2.connect(DSN)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO request_logs (endpoint, user_id, input, output, elapsed_ms) "
+                "VALUES (%s, %s, %s::jsonb, %s::jsonb, %s)",
+                (endpoint, user_id, json.dumps(input_data), json.dumps(output_data), elapsed_ms),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning("request_log failed: %s", e)
+
+async def _log_request(endpoint: str, user_id: str, input_data: dict,
+                       output_data: dict, elapsed_ms: int) -> None:
+    """Async wrapper — runs the blocking DB write in a thread executor."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None, _write_request_log, endpoint, user_id, input_data, output_data, elapsed_ms
+    )
+
 # ── embeddings / LLM ─────────────────────────────────────────────────────────
 # Switch provider by setting CHAT_MODEL in .env:
 #   gpt-4o-mini          → OpenAI
@@ -771,7 +799,7 @@ async def google_callback(code: str = Query(...), state: str = Query(...)):
 
 
 @app.post("/search")
-def search(req: SearchRequest, authorization: str = Header(default=None)):
+async def search(req: SearchRequest, authorization: str = Header(default=None)):
     user = _get_user_from_header(authorization)
     if req.source == "caselaw":
         retriever = CaselawRetriever(k=req.k)
@@ -786,16 +814,21 @@ def search(req: SearchRequest, authorization: str = Header(default=None)):
     elapsed_ms = round((time.time() - t0) * 1000)
     logger.info("search query=%r source=%s k=%d user=%s results=%d elapsed_ms=%d",
                 req.query, req.source, req.k, user, len(docs), elapsed_ms)
+
+    results = [{"content": d.page_content[:600], "metadata": d.metadata} for d in docs]
+
+    asyncio.create_task(_log_request(
+        endpoint="/search",
+        user_id=user,
+        input_data={"query": req.query, "source": req.source, "k": req.k},
+        output_data={"results": results, "count": len(results)},
+        elapsed_ms=elapsed_ms,
+    ))
+
     return {
         "query": req.query,
         "source": req.source,
-        "results": [
-            {
-                "content": d.page_content[:600],
-                "metadata": d.metadata,
-            }
-            for d in docs
-        ]
+        "results": results,
     }
 
 
@@ -866,6 +899,13 @@ async def ask(req: AskRequest, authorization: str = Header(default=None)):
             logger.info("ask question=%r source=%s k=%d user=%s elapsed_ms=%d chunks=%d",
                         req.question[:120], req.source, req.k, user, elapsed_ms, chunks)
             yield "data: [DONE]\n\n"
+            asyncio.create_task(_log_request(
+                endpoint="/ask",
+                user_id=user,
+                input_data={"question": req.question, "source": req.source, "k": req.k},
+                output_data={"answer": strip_think(buffer)},
+                elapsed_ms=elapsed_ms,
+            ))
 
         return StreamingResponse(
             stream_both(),
@@ -883,15 +923,24 @@ async def ask(req: AskRequest, authorization: str = Header(default=None)):
     )
 
     async def stream_response() -> AsyncIterator[str]:
+        full_text = ""
         chunks = 0
         t0 = time.time()
         async for chunk in chain.astream(req.question):
+            full_text += chunk
             chunks += 1
             yield f"data: {json.dumps({'text': chunk})}\n\n"
         elapsed_ms = round((time.time() - t0) * 1000)
         logger.info("ask question=%r source=%s k=%d user=%s elapsed_ms=%d chunks=%d",
                     req.question[:120], req.source, req.k, user, elapsed_ms, chunks)
         yield "data: [DONE]\n\n"
+        asyncio.create_task(_log_request(
+            endpoint="/ask",
+            user_id=user,
+            input_data={"question": req.question, "source": req.source, "k": req.k},
+            output_data={"answer": strip_think(full_text)},
+            elapsed_ms=elapsed_ms,
+        ))
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
@@ -975,6 +1024,18 @@ async def chat(req: ChatRequest, authorization: str = Header(default=None)):
         logger.info("chat question=%r messages=%d case_id=%s user=%s elapsed_ms=%d chunks=%d",
                     req.question[:120], len(req.messages), req.case_id, user, elapsed_ms, chunks)
         yield "data: [DONE]\n\n"
+        asyncio.create_task(_log_request(
+            endpoint="/chat",
+            user_id=user,
+            input_data={
+                "question": req.question,
+                "messages": [{"role": m.role, "content": m.content} for m in req.messages],
+                "case_id": req.case_id,
+                "k": req.k,
+            },
+            output_data={"answer": strip_think(buffer)},
+            elapsed_ms=elapsed_ms,
+        ))
 
     return StreamingResponse(
         stream_chat(),
