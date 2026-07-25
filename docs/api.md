@@ -245,9 +245,34 @@ Set a new password using a reset token from the email.
 
 ### `GET /auth/google`
 
-Initiate Google OAuth 2.0 sign-in. Redirects the browser to Google's consent screen. On completion, the callback redirects to the frontend with `?token=<access_token>&refresh=<refresh_token>` in the URL.
+Initiate Google OAuth 2.0 sign-in. Redirects the browser to Google's consent screen.
 
 **Response:** HTTP redirect (302) — no JSON body.
+
+Returns `501` if Google OAuth is not configured on this instance.
+
+---
+
+### `GET /auth/google/callback`
+
+OAuth callback endpoint — called automatically by Google after the user grants consent. Redirects the browser to the frontend with the issued tokens in the URL query string:
+
+```
+<FRONTEND_URL>/auth/callback?token=<access_token>&refresh=<refresh_token>
+```
+
+This endpoint is part of the OAuth browser flow and is not intended to be called directly.
+
+**Query parameters** (set by Google)
+
+| Parameter | Type   | Description              |
+|-----------|--------|--------------------------|
+| `code`    | string | Google authorisation code |
+| `state`   | string | CSRF state token          |
+
+**Response:** HTTP redirect (302) — no JSON body.
+
+Returns `400` on invalid state or if the token exchange with Google fails.
 
 ---
 
