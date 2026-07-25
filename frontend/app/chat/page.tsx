@@ -59,7 +59,7 @@ export default function ChatPage() {
         }
       })
       .catch(() => {})
-  }, [token, user])
+  }, [token])
 
   async function sendMessage(question: string) {
     if (!question.trim() || loading) return
