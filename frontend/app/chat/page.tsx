@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
-import { MessageSquare, Send, BookOpen, ChevronRight, X, SidebarOpen } from 'lucide-react'
+import { MessageSquare, Send, BookOpen, ChevronRight, X, SidebarOpen, FolderOpen } from 'lucide-react'
 import Nav from '@/components/Nav'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -10,9 +10,11 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import LoginModal from '@/components/LoginModal'
 import { useGuestQuota } from '@/hooks/useGuestQuota'
 import { API_URL as API } from '@/lib/config'
+import { useAuth } from '@/context/auth'
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 type Source = { citation: string; content: string; score: number; source_type: string }
+type UserCase = { id: string; matter: { type?: string; subtype?: string; [key: string]: unknown } | null; created_at: string }
 
 const SUGGESTED = [
   'What is a committal hearing?',
@@ -27,12 +29,37 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSources, setShowSources] = useState(false)
+  const [caseId, setCaseId] = useState<string | null>(null)
+  const [caseMatter, setCaseMatter] = useState<{ type?: string; subtype?: string } | null>(null)
+  const [showCaseBanner, setShowCaseBanner] = useState(true)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const { gate, showGate, dismissGate } = useGuestQuota()
+  const { token, user } = useAuth()
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Fetch the logged-in user's most recent case on mount / when token changes
+  useEffect(() => {
+    if (!token || !user) {
+      setCaseId(null)
+      setCaseMatter(null)
+      return
+    }
+    fetch(`${API}/user/case`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.case) {
+          setCaseId(data.case.id)
+          setCaseMatter(data.case.matter ?? null)
+          setShowCaseBanner(true)
+        }
+      })
+      .catch(() => {})
+  }, [token, user])
 
   async function sendMessage(question: string) {
     if (!question.trim() || loading) return
@@ -46,13 +73,16 @@ export default function ChatPage() {
 
     let answer = ''
     try {
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) authHeaders['Authorization'] = `Bearer ${token}`
       await fetchEventSource(`${API}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
           question,
           messages: messages.map(m => ({ role: m.role, content: m.content })),
           k: 5,
+          ...(caseId ? { case_id: caseId } : {}),
         }),
         onmessage(ev) {
           if (ev.data === '[DONE]') return
@@ -88,6 +118,25 @@ export default function ChatPage() {
     <div className="h-screen flex flex-col bg-gray-50">
       {showGate && <LoginModal onClose={dismissGate} />}
       <Nav />
+
+      {/* Case context banner */}
+      {caseId && showCaseBanner && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-b border-emerald-100 text-emerald-800 text-xs">
+          <FolderOpen className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span className="font-medium">
+            Analysing your case
+            {caseMatter?.type ? `: ${caseMatter.type}` : ''}
+            {caseMatter?.subtype ? ` · ${caseMatter.subtype}` : ''}
+          </span>
+          <button
+            onClick={() => setShowCaseBanner(false)}
+            className="ml-auto text-emerald-500 hover:text-emerald-700 p-0.5"
+            aria-label="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 min-h-0 relative">
 

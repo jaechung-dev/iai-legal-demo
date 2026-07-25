@@ -98,6 +98,39 @@ class CaselawRetriever(BaseRetriever):
         ]
 
 
+class CaseChunkRetriever(BaseRetriever):
+    """Semantic search over uploaded case document chunks for a specific case."""
+
+    k: int = Field(default=5)
+    case_id: str = Field(default="")
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> list[Document]:
+        vec = embedder.embed_query(query)
+        vec_str = "[" + ",".join(str(x) for x in vec) + "]"
+        conn = psycopg2.connect(DSN)
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT content, metadata, 1 - (embedding <=> %s::vector) AS score
+                FROM case_chunks
+                WHERE case_id = %s AND embedding IS NOT NULL
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+            """, (vec_str, self.case_id, vec_str, self.k))
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [
+            Document(
+                page_content=r[0],
+                metadata={**(r[1] if isinstance(r[1], dict) else {}), "source": "case_chunk", "score": round(r[2], 4)},
+            )
+            for r in rows
+        ]
+
+
 class CaseEventRetriever(BaseRetriever):
     """Semantic search over case timeline events for a specific case."""
 

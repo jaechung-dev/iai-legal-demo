@@ -39,6 +39,7 @@ from services.rag.retrievers import (
     LegislationRetriever,
     CaselawRetriever,
     CaseEventRetriever,
+    CaseChunkRetriever,
     DSN,
     EMBED_MODEL,
 )
@@ -117,7 +118,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     messages: list[ChatMessage] = []
-    case_id: str = "nguyen"
+    case_id: str | None = None
     k: int = 5
 
 
@@ -138,6 +139,22 @@ def _get_user_from_header(authorization: str = None) -> str:
         return claims.get("sub", "anon")
     except Exception:
         return "anon"
+
+
+def _require_auth(authorization: str | None) -> str:
+    """Like _get_user_from_header but raises 401 for anonymous/invalid tokens."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG])
+        user_id = claims.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 # ── App ────────────────────────────────────────────────────────────────────────
@@ -217,6 +234,25 @@ async def submit_intake(req: IntakeRequest, authorization: str = Header(default=
     finally:
         conn.close()
     return {"ok": True, "id": str(row[0]), "created_at": row[1].isoformat()}
+
+
+@app.get("/user/case")
+async def get_user_case(authorization: str = Header(default=None)):
+    user_id = _require_auth(authorization)
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, matter, created_at FROM case_intakes
+               WHERE user_id = %s ORDER BY created_at DESC LIMIT 1""",
+            (user_id,)
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return {"case": None}
+    return {"case": {"id": str(row[0]), "matter": row[1], "created_at": row[2].isoformat()}}
 
 
 @app.post("/search")
@@ -330,6 +366,9 @@ async def chat(req: ChatRequest, authorization: str = Header(default=None)):
     leg = LegislationRetriever(k=req.k, jurisdiction="NSW")
     cas = CaselawRetriever(k=req.k)
     all_docs = leg.invoke(req.question) + cas.invoke(req.question)
+    if req.case_id:
+        case_docs = CaseChunkRetriever(case_id=req.case_id, k=req.k).invoke(req.question)
+        all_docs = case_docs + all_docs
 
     sources = [
         {
