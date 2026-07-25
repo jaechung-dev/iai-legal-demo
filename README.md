@@ -98,13 +98,72 @@ Connect Claude Desktop:
 
 ---
 
+## Architecture
+
+### Planned: 3-Microservice Design
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     probonoai.com.au                     │
+└─────────────────────────────────────────────────────────┘
+         │                    │                    │
+         ▼                    ▼                    ▼
+   [Frontend]          [Auth Service]          [MCP Server]
+   Next.js static      /auth/* routes          /mcp routes
+   S3 + CloudFront     Lambda (planned)        Lambda (planned)
+         │                    │                    │
+         ▼                    ▼                    ▼
+      [BFF]            [BFF]                [BFF internally]
+   FastAPI search    token validation       RAG tool calls
+   /search /ask      /chat /timeline
+         │
+         ▼
+   [Supabase PostgreSQL + pgvector]
+```
+
+### Services
+
+**1. Auth Service** (`/auth/*` routes — planned standalone)
+
+Handles all identity concerns: register, login, OTP verification, OAuth (Google), JWT issuance and refresh, logout, and MCP token management. Currently embedded in `main.py`; planned as a separately deployable Lambda so auth logic can be iterated and scaled independently.
+
+**2. BFF — Backend for Frontend** (`/search`, `/ask`, `/chat`, `/timeline` — currently `main.py`)
+
+FastAPI service that serves the Next.js frontend. Owns retrieval (pgvector), the LangChain LCEL RAG chain, SSE streaming, and multi-turn chat history. Validates JWTs issued by the Auth Service. Currently co-located with Auth in `main.py`; planned split gives it a dedicated Lambda and API Gateway stage.
+
+**3. MCP Server** (`mcp_server.py`)
+
+Exposes the four RAG tools (`search`, `ask`, `fetch`, `collections`) over FastMCP streamable HTTP for AI clients (Claude Desktop, ChatGPT). Requires MCP token auth (token obtained from the Auth Service). Internally delegates heavy lifting to the BFF rather than duplicating retrieval logic.
+
+**Frontend** (not a microservice — static site)
+
+Next.js 15 static export hosted on S3 + CloudFront. Talks directly to the BFF and Auth Service over API Gateway. No server-side rendering; all API calls are client-side fetch/SSE.
+
+**Shared data layer**
+
+All three services share one Supabase PostgreSQL instance with pgvector. The schema is append-only for embeddings; auth state (sessions, tokens) lives in separate tables.
+
+### Current state vs. planned split
+
+| Concern | Current file | Planned service |
+|---|---|---|
+| Auth routes (`/auth/*`) | `main.py` | Auth Service (standalone Lambda) |
+| Search / Ask / Chat / Timeline | `main.py` | BFF (standalone Lambda) |
+| JWT helpers | `auth.py` | shared lib or Auth Service internal |
+| MCP tools | `mcp_server.py` | MCP Server (standalone Lambda) |
+| Frontend | `frontend/` | S3 + CloudFront (unchanged) |
+
+---
+
 ## Project Structure
 
 ```
 iai-legal-demo/
-├── main.py               # FastAPI app — auth, search, ask, chat, timeline (port 20000)
-├── mcp_server.py         # FastMCP server — search/ask/fetch/collections (port 20002)
-├── auth.py               # JWT helpers
+├── main.py               # FastAPI app — Auth Service + BFF (combined, port 20000)
+│                         #   planned split: auth routes → Auth Service
+│                         #                 search/ask/chat/timeline → BFF
+├── mcp_server.py         # MCP Server — search/ask/fetch/collections (port 20002)
+├── auth.py               # JWT helpers (shared between Auth Service and BFF)
 ├── schema.sql            # PostgreSQL schema — pgvector tables + HNSW indexes
 ├── ingest.py             # Embed and ingest case events (JSONL → demo_case_events)
 ├── ingest_law.py         # Embed and ingest legislation/caselaw chunks (CSV → tables)
@@ -115,7 +174,7 @@ iai-legal-demo/
 │   └── case_nguyen_v_r.jsonl   # Demo case data (R v Nguyen, NSW District Court 2025)
 ├── legislation_demo.csv  # Sample legislation chunks for local setup
 ├── caselaw_demo.csv      # Sample caselaw chunks for local setup
-├── frontend/
+├── frontend/             # Frontend (static site — not a microservice)
 │   ├── app/
 │   │   ├── page.tsx      # / — Case timeline
 │   │   ├── chat/         # /chat — RAG chat + sources panel
@@ -207,19 +266,38 @@ terraform apply      # Lambda + API Gateway + S3 + CloudFront + ACM cert
 
 ## AWS Architecture
 
+Current deployment is a single Lambda behind API Gateway. The planned target splits this into three Lambda functions, one per microservice.
+
+**Current (monolith):**
+
 ```
 probonoai.com.au
   → CloudFront (CDN + HTTPS)
       ├── S3 (static Next.js export)
       └── API Gateway HTTP v2
-            └── Lambda (FastAPI + Mangum)
+            └── Lambda (FastAPI + Mangum — Auth + BFF combined)
                   └── Supabase (PostgreSQL + pgvector)
+```
+
+**Planned (microservices):**
+
+```
+probonoai.com.au
+  → CloudFront (CDN + HTTPS)
+      ├── S3 (static Next.js export)
+      └── API Gateway HTTP v2
+            ├── /auth/*  → Lambda: Auth Service
+            ├── /mcp     → Lambda: MCP Server
+            └── /*       → Lambda: BFF (search, ask, chat, timeline)
+                                └── Supabase (PostgreSQL + pgvector)
 ```
 
 | Service | Purpose |
 |---|---|
-| Lambda (512 MB, 60s) | Stateless backend — all API routes |
-| API Gateway HTTP v2 | HTTPS entry point + Lambda proxy |
+| Lambda — Auth Service | `/auth/*` routes: login, register, OAuth, JWT, MCP tokens |
+| Lambda — BFF | `/search`, `/ask`, `/chat`, `/timeline` — RAG + retrieval |
+| Lambda — MCP Server | `/mcp` — FastMCP streamable HTTP for AI clients |
+| API Gateway HTTP v2 | HTTPS entry point + Lambda proxy (route-based) |
 | S3 | Static frontend |
 | CloudFront | CDN + HTTPS + cache |
 | ACM | TLS certificate |
