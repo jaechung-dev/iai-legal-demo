@@ -45,6 +45,7 @@ GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:20001")
 BACKEND_URL          = os.getenv("BACKEND_URL", "http://localhost:20000")
+APP_NAME             = os.getenv("APP_NAME", "ProBono AI")
 
 _demo_pw  = os.getenv("DEMO_PASSWORD")
 _admin_pw = os.getenv("ADMIN_PASSWORD")
