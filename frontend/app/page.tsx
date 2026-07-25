@@ -26,7 +26,9 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (isStage()) {
-      router.replace('/chat/')
+      if (typeof window !== 'undefined' && window.location.pathname !== '/chat/') {
+        router.replace('/chat/')
+      }
       return
     }
     // On www: if already logged in, go straight to chat
