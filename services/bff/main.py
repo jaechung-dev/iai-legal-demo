@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from typing import AsyncIterator
 
 import psycopg2
+from psycopg2.extras import Json
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -120,6 +121,12 @@ class ChatRequest(BaseModel):
     k: int = 5
 
 
+class IntakeRequest(BaseModel):
+    personal: dict
+    matter: dict
+    files: list = []
+
+
 # ── Auth helper ────────────────────────────────────────────────────────────────
 
 
@@ -192,6 +199,24 @@ def health():
     except Exception as e:
         db = str(e)
     return {"status": "ok", "db": db, "model": CHAT_MODEL}
+
+
+@app.post("/intake")
+async def submit_intake(req: IntakeRequest, authorization: str = Header(default=None)):
+    user_id = _get_user_from_header(authorization)
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO case_intakes (user_id, personal, matter, files)
+               VALUES (%s, %s, %s, %s) RETURNING id, created_at""",
+            (user_id, Json(req.personal), Json(req.matter), Json(req.files))
+        )
+        row = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "id": str(row[0]), "created_at": row[1].isoformat()}
 
 
 @app.post("/search")

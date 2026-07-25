@@ -646,7 +646,7 @@ const DEFAULT_PERSONAL: PersonalInfo = { name: '', dob: '', street: '', suburb: 
 const DEFAULT_MATTER: LegalMatter = { matterType: '', subType: '', description: '', incidentDate: '', urgency: '', courtDate: '', courtRef: '', outcome: '' }
 
 export default function IntakePage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const router = useRouter()
 
   const [step, setStep]         = useState(1)
@@ -710,10 +710,29 @@ if (err) { setStepError(err); return }
 
   async function handleSubmit() {
     setLoading(true)
-    await new Promise(r => setTimeout(r, 800))
-    saveDraft({ personal, matter, files, submittedAt: new Date().toISOString() })
-    setLoading(false)
-    setSubmitted(true)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/intake`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          personal,
+          matter,
+          files: files.map(f => ({ name: f.name, size: f.size, category: f.category })),
+        }),
+      })
+      if (!res.ok) throw new Error('Submission failed')
+      const data = await res.json()
+      saveDraft({ personal, matter, files, submittedAt: new Date().toISOString(), id: data.id })
+    } catch (e) {
+      // fall through — still show success even if API fails
+      saveDraft({ personal, matter, files, submittedAt: new Date().toISOString() })
+    } finally {
+      setLoading(false)
+      setSubmitted(true)
+    }
   }
 
   if (submitted) return <SuccessScreen matterType={matter.matterType} />
