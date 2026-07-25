@@ -18,7 +18,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 DSN     = os.getenv("DATABASE_URL", "")
-RAG_URL = os.getenv("RAG_URL", "http://127.0.0.1:20000")
+_default_rag = (
+    "https://api.probonoai.com.au"
+    if os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+    else "http://127.0.0.1:20000"
+)
+RAG_URL = os.getenv("RAG_URL", _default_rag)
 
 _PUBLIC = {"/"}
 
@@ -187,6 +192,9 @@ app = CORSMiddleware(
     allow_headers=["*", "Authorization"],
     expose_headers=["mcp-session-id"],
 )
+
+from mangum import Mangum
+handler = Mangum(app, lifespan="off")
 
 if __name__ == "__main__":
     import uvicorn

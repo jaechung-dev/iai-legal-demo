@@ -40,7 +40,10 @@ resource "aws_iam_role_policy" "github_actions" {
         Sid    = "Lambda"
         Effect = "Allow"
         Action = ["lambda:UpdateFunctionCode", "lambda:GetFunction"]
-        Resource = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}"
+        Resource = [
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}-mcp"
+        ]
       },
       {
         Sid    = "S3"

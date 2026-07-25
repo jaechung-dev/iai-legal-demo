@@ -62,6 +62,18 @@ jobs:
             --s3-key lambda.zip \
             --output text
 
+      - name: Upload mcp_lambda.zip to S3
+        run: |
+          aws s3 cp mcp_lambda.zip s3://${{ secrets.S3_BUCKET }}/mcp_lambda.zip
+
+      - name: Update MCP Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name iai-legal-demo-mcp \
+            --s3-bucket ${{ secrets.S3_BUCKET }} \
+            --s3-key mcp_lambda.zip \
+            --output text
+
   deploy-frontend:
     name: Deploy Frontend
     needs: changes
