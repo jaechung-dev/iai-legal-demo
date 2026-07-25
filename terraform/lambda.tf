@@ -8,11 +8,12 @@ resource "aws_lambda_function" "api" {
   role          = aws_iam_role.lambda.arn
   runtime       = "python3.12"
   handler       = "main.handler"
-  filename      = "../lambda.zip"
-  timeout       = 60
-  memory_size   = 512
+  s3_bucket        = aws_s3_bucket.frontend.bucket
+  s3_key           = "lambda.zip"
+  timeout          = 60
+  memory_size      = 512
 
-  source_code_hash = filebase64sha256("../lambda.zip")
+  source_code_hash = null
 
   environment {
     variables = {
