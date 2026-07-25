@@ -1,0 +1,137 @@
+"""
+RAG retriever classes — pgvector similarity search over Supabase/Postgres.
+
+Each retriever is a LangChain BaseRetriever that embeds the query with
+OpenAI text-embedding-3-small, then performs a cosine-distance lookup
+against the appropriate table.
+"""
+import os
+import psycopg2
+
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
+from pydantic import Field
+
+DSN         = os.getenv("DATABASE_URL", "")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
+
+embedder = OpenAIEmbeddings(model=EMBED_MODEL)
+
+
+class LegislationRetriever(BaseRetriever):
+    """Semantic search over NSW (or Commonwealth) legislation chunks."""
+
+    k: int = Field(default=4)
+    jurisdiction: str = Field(default="NSW")
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> list[Document]:
+        vec = embedder.embed_query(query)
+        vec_str = "[" + ",".join(str(x) for x in vec) + "]"
+        conn = psycopg2.connect(DSN)
+        try:
+            cur = conn.cursor()
+            if self.jurisdiction == "both":
+                cur.execute("""
+                    SELECT citation, text, 1 - (embedding <=> %s::vector) AS score
+                    FROM legislation_chunks
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s
+                """, (vec_str, vec_str, self.k))
+            else:
+                cur.execute("""
+                    SELECT citation, text, 1 - (embedding <=> %s::vector) AS score
+                    FROM legislation_chunks
+                    WHERE embedding IS NOT NULL AND jurisdiction = %s
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s
+                """, (vec_str, self.jurisdiction, vec_str, self.k))
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [
+            Document(
+                page_content=r[1],
+                metadata={"source": "legislation", "citation": r[0], "score": round(r[2], 4)},
+            )
+            for r in rows
+        ]
+
+
+class CaselawRetriever(BaseRetriever):
+    """Semantic search over NSW caselaw paragraph chunks."""
+
+    k: int = Field(default=4)
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> list[Document]:
+        vec = embedder.embed_query(query)
+        vec_str = "[" + ",".join(str(x) for x in vec) + "]"
+        conn = psycopg2.connect(DSN)
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT neutral_citation, title, text, 1 - (embedding <=> %s::vector) AS score
+                FROM caselaw_chunks
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+            """, (vec_str, vec_str, self.k))
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [
+            Document(
+                page_content=r[2],
+                metadata={
+                    "source": "caselaw",
+                    "citation": f"{r[1]} ({r[0]})",
+                    "score": round(r[3], 4),
+                },
+            )
+            for r in rows
+        ]
+
+
+class CaseEventRetriever(BaseRetriever):
+    """Semantic search over case timeline events for a specific case."""
+
+    k: int = Field(default=5)
+    case_id: str = Field(default="nguyen")
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> list[Document]:
+        vec = embedder.embed_query(query)
+        vec_str = "[" + ",".join(str(x) for x in vec) + "]"
+        conn = psycopg2.connect(DSN)
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT date, category, event_type, subject, content,
+                       1 - (embedding <=> %s::vector) AS score
+                FROM case_events
+                WHERE case_id = %s AND embedding IS NOT NULL
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+            """, (vec_str, self.case_id, vec_str, self.k))
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return [
+            Document(
+                page_content=f"[{r[1]} — {r[2]}] {r[3]}\n{r[4]}",
+                metadata={
+                    "source": "case_event",
+                    "date": str(r[0]),
+                    "category": r[1],
+                    "score": round(r[5], 4),
+                },
+            )
+            for r in rows
+        ]
