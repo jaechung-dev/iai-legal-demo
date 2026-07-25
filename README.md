@@ -159,32 +159,15 @@ All three services share one Supabase PostgreSQL instance with pgvector. The sch
 
 ```
 iai-legal-demo/
-├── main.py               # FastAPI app — Auth Service + BFF (combined, port 20000)
-│                         #   planned split: auth routes → Auth Service
-│                         #                 search/ask/chat/timeline → BFF
-├── mcp_server.py         # MCP Server — search/ask/fetch/collections (port 20002)
-├── auth.py               # JWT helpers (shared between Auth Service and BFF)
-├── schema.sql            # PostgreSQL schema — pgvector tables + HNSW indexes
-├── ingest.py             # Embed and ingest case events (JSONL → demo_case_events)
-├── ingest_law.py         # Embed and ingest legislation/caselaw chunks (CSV → tables)
-├── requirements.txt
-├── build_lambda.sh       # Package Lambda zip
-├── deploy_frontend.sh    # Build Next.js → sync S3 → invalidate CloudFront
-├── cases/
-│   └── case_nguyen_v_r.jsonl   # Demo case data (R v Nguyen, NSW District Court 2025)
-├── legislation_demo.csv  # Sample legislation chunks for local setup
-├── caselaw_demo.csv      # Sample caselaw chunks for local setup
-├── frontend/             # Frontend (static site — not a microservice)
-│   ├── app/
-│   │   ├── page.tsx      # / — Case timeline
-│   │   ├── chat/         # /chat — RAG chat + sources panel
-│   │   ├── search/       # /search — Semantic search + Ask modes
-│   │   ├── connect/      # /connect — MCP token page
-│   │   └── login/
-│   └── components/
-│       ├── TimelineClient.tsx
-│       └── Nav.tsx
-└── terraform/            # Lambda + API Gateway + S3 + CloudFront + ACM
+├── services/
+│   ├── rag/              # pgvector retrievers + LangChain chains + prompts
+│   ├── langchain/        # LangChain LCEL chain definitions
+│   ├── auth/             # Auth service — JWT, OTP, OAuth, MCP tokens
+│   ├── mcp/              # MCP server — RAG tools over streamable HTTP
+│   └── bff/              # BFF — thin FastAPI routing layer
+├── frontend/             # Next.js static export → S3 + CloudFront
+├── terraform/            # IaC — Lambda, API Gateway, S3, CloudFront, ACM
+└── tests/                # Backend smoke + integration tests
 ```
 
 ---
@@ -261,6 +244,8 @@ terraform apply      # Lambda + API Gateway + S3 + CloudFront + ACM cert
 ```bash
 ./deploy_frontend.sh    # build → S3 sync → CloudFront invalidation
 ```
+
+> **Planned:** Migrate to AWS Secrets Manager for production secret rotation (JWT_SECRET, DATABASE_URL, OPENAI_API_KEY). Currently using GitHub Secrets + Lambda environment variables.
 
 ---
 
