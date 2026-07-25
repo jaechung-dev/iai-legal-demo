@@ -24,3 +24,19 @@ terraform/terraform.tfvars
 terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate*
+
+# Lambda zips
+mcp_lambda.zip
+
+# Terraform plans
+terraform/*.tfplan
+
+# Vim swap files
+*.swp
+*.swo
+
+# Test artifacts
+frontend/playwright-report/
+
+# Root node_modules
+/node_modules/

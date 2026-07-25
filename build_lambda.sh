@@ -16,6 +16,7 @@ pip3 install \
 
 echo "→ Copying source files..."
 cp main.py lambda_pkg/
+cp -r services/ lambda_pkg/services/
 
 echo "→ Zipping..."
 cd lambda_pkg
@@ -37,7 +38,8 @@ pip3 install \
   -r requirements.txt -q
 
 echo "→ Copying MCP source files..."
-cp mcp_server.py mcp_lambda_pkg/
+cp main.py mcp_lambda_pkg/
+cp -r services/ mcp_lambda_pkg/services/
 
 echo "→ Zipping..."
 cd mcp_lambda_pkg
