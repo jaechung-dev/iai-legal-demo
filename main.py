@@ -11,7 +11,11 @@ import psycopg2
 from typing import AsyncIterator
 
 import time
+import logging
 import uuid
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 import httpx
 from contextlib import contextmanager
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -431,6 +435,15 @@ def _require_auth(authorization: str | None) -> str:
         raise HTTPException(401, "User not found")
     return user["id"]
 
+def _get_user_from_header(authorization: str = Header(default=None)) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        return "anon"
+    try:
+        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=["HS256"])
+        return claims.get("sub", "anon")
+    except Exception:
+        return "anon"
+
 # ── Auth endpoints ─────────────────────────────────────────────────────────────
 
 @app.post("/auth/register")
@@ -758,7 +771,8 @@ async def google_callback(code: str = Query(...), state: str = Query(...)):
 
 
 @app.post("/search")
-def search(req: SearchRequest):
+def search(req: SearchRequest, authorization: str = Header(default=None)):
+    user = _get_user_from_header(authorization)
     if req.source == "caselaw":
         retriever = CaselawRetriever(k=req.k)
     elif req.source == "case_events":
@@ -766,7 +780,12 @@ def search(req: SearchRequest):
     else:
         retriever = LegislationRetriever(k=req.k, jurisdiction=req.jurisdiction)
 
+    logger.info("search query=%r source=%s k=%d user=%s", req.query, req.source, req.k, user)
+    t0 = time.time()
     docs = retriever.invoke(req.query)
+    elapsed_ms = round((time.time() - t0) * 1000)
+    logger.info("search query=%r source=%s k=%d user=%s results=%d elapsed_ms=%d",
+                req.query, req.source, req.k, user, len(docs), elapsed_ms)
     return {
         "query": req.query,
         "source": req.source,
@@ -817,7 +836,9 @@ def timeline(case_id: str):
 
 
 @app.post("/ask")
-async def ask(req: AskRequest):
+async def ask(req: AskRequest, authorization: str = Header(default=None)):
+    user = _get_user_from_header(authorization)
+    logger.info("ask question=%r source=%s k=%d user=%s", req.question[:120], req.source, req.k, user)
     if req.source == "caselaw":
         retriever = CaselawRetriever(k=req.k)
     elif req.source == "case_events":
@@ -833,11 +854,17 @@ async def ask(req: AskRequest):
 
         async def stream_both() -> AsyncIterator[str]:
             buffer = ""
+            chunks = 0
+            t0 = time.time()
             async for chunk in chain.astream({"context": context, "question": req.question}):
                 buffer += chunk
+                chunks += 1
                 clean = strip_think(buffer)
                 if clean:
                     yield f"data: {json.dumps({'text': chunk})}\n\n"
+            elapsed_ms = round((time.time() - t0) * 1000)
+            logger.info("ask question=%r source=%s k=%d user=%s elapsed_ms=%d chunks=%d",
+                        req.question[:120], req.source, req.k, user, elapsed_ms, chunks)
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(
@@ -856,8 +883,14 @@ async def ask(req: AskRequest):
     )
 
     async def stream_response() -> AsyncIterator[str]:
+        chunks = 0
+        t0 = time.time()
         async for chunk in chain.astream(req.question):
+            chunks += 1
             yield f"data: {json.dumps({'text': chunk})}\n\n"
+        elapsed_ms = round((time.time() - t0) * 1000)
+        logger.info("ask question=%r source=%s k=%d user=%s elapsed_ms=%d chunks=%d",
+                    req.question[:120], req.source, req.k, user, elapsed_ms, chunks)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
@@ -892,7 +925,10 @@ class ChatRequest(BaseModel):
     k: int = 5
 
 @app.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, authorization: str = Header(default=None)):
+    user = _get_user_from_header(authorization)
+    logger.info("chat question=%r messages=%d case_id=%s user=%s",
+                req.question[:120], len(req.messages), req.case_id, user)
     leg = LegislationRetriever(k=req.k, jurisdiction="NSW")
     cas = CaselawRetriever(k=req.k)
     leg_docs = leg.invoke(req.question)
@@ -924,14 +960,20 @@ async def chat(req: ChatRequest):
     async def stream_chat():
         yield f"data: {__import__('json').dumps({'type': 'sources', 'docs': sources})}\n\n"
         buffer = ""
+        chunks = 0
+        t0 = time.time()
         async for chunk in llm.astream(lc_messages):
             token = chunk.content if hasattr(chunk, "content") else str(chunk)
             buffer += token
+            chunks += 1
             before = strip_think(buffer[:-len(token)] if len(token) <= len(buffer) else "")
             after = strip_think(buffer)
             new_text = after[len(before):]
             if new_text:
                 yield f"data: {__import__('json').dumps({'type': 'token', 'text': new_text})}\n\n"
+        elapsed_ms = round((time.time() - t0) * 1000)
+        logger.info("chat question=%r messages=%d case_id=%s user=%s elapsed_ms=%d chunks=%d",
+                    req.question[:120], len(req.messages), req.case_id, user, elapsed_ms, chunks)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
