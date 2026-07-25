@@ -234,4 +234,29 @@ test.describe('Connect page UI', () => {
     await expect(page.locator('text=Active tokens')).toBeVisible({ timeout: 10000 })
   })
 
+  test.afterAll(async ({ request }) => {
+    // Clean up any 'playwright-ui-test' tokens left by the UI tests
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://api.probonoai.com.au'
+
+    const loginRes = await request.post(`${apiBase}/auth/login`, {
+      data: { username: 'demo', password: 'demo1234' },
+    })
+    if (!loginRes.ok()) return
+    const { access_token } = await loginRes.json()
+
+    const listRes = await request.get(`${apiBase}/auth/mcp/tokens`, {
+      headers: { Authorization: `Bearer ${access_token}` },
+    })
+    if (!listRes.ok()) return
+    const { tokens } = await listRes.json()
+
+    for (const token of tokens as Array<{ id: string; name: string }>) {
+      if (token.name === 'playwright-ui-test') {
+        await request.delete(`${apiBase}/auth/mcp/token/${token.id}`, {
+          headers: { Authorization: `Bearer ${access_token}` },
+        })
+      }
+    }
+  })
+
 })
