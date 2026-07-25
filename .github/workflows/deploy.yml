@@ -50,11 +50,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-2
 
+      - name: Upload lambda.zip to S3
+        run: |
+          aws s3 cp lambda.zip s3://${{ secrets.S3_BUCKET }}/lambda.zip
+
       - name: Update Lambda function code
         run: |
           aws lambda update-function-code \
             --function-name iai-legal-demo \
-            --zip-file fileb://lambda.zip \
+            --s3-bucket ${{ secrets.S3_BUCKET }} \
+            --s3-key lambda.zip \
             --output text
 
   deploy-frontend:

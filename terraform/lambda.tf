@@ -20,6 +20,7 @@ resource "aws_lambda_function" "api" {
       OPENAI_API_KEY       = var.openai_api_key
       JWT_SECRET           = var.jwt_secret
       ADMIN_PASSWORD       = var.admin_password
+      DEMO_PASSWORD        = var.demo_password
       FROM_EMAIL           = var.from_email
       FRONTEND_URL         = var.frontend_url
       BACKEND_URL          = var.backend_url

@@ -24,6 +24,11 @@ variable "admin_password" {
   default   = "admin1234"
 }
 
+variable "demo_password" {
+  sensitive = true
+  default   = "demo1234"
+}
+
 variable "from_email" {
   default = "noreply@probonoai.com.au"
 }
@@ -33,7 +38,7 @@ variable "frontend_url" {
 }
 
 variable "backend_url" {
-  default = "https://6arf47x0pk.execute-api.ap-southeast-2.amazonaws.com"
+  default = "https://api.probonoai.com.au"
 }
 
 variable "google_client_id" {
