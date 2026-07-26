@@ -1,51 +1,94 @@
 #!/bin/bash
 # Build Lambda deployment zips
 # Usage: ./build_lambda.sh
+#
+# Produces:
+#   api_lambda.zip    — auth, intake, conversations (~10MB, no ML deps)
+#   ai_lambda.zip     — search, ask, chat (~50MB, full RAG stack)
+#   mcp_lambda.zip    — MCP server (~50MB)
+#   ingest_lambda.zip — OCR + chunk + embed (~40MB)
 
 set -e
 
-# ── Main API Lambda ────────────────────────────────────────────────────────────
-echo "→ Installing dependencies for Lambda (Python 3.12, linux/x86_64)..."
-rm -rf lambda_pkg
-pip3 install \
-  --platform manylinux2014_x86_64 \
-  --python-version 3.12 \
-  --only-binary=:all: \
-  --target lambda_pkg \
-  -r requirements.txt -q
+PY_FLAGS="--platform manylinux2014_x86_64 --python-version 3.12 --only-binary=:all:"
 
-echo "→ Copying source files..."
-cp main.py lambda_pkg/
-cp -r services/ lambda_pkg/services/
+# Remove any stale nested build artifacts before packaging
+find services -name "lambda_pkg" -o -name "*_lambda_pkg" | xargs rm -rf 2>/dev/null || true
 
-echo "→ Zipping..."
-cd lambda_pkg
-zip -r ../lambda.zip . -q
-cd ..
-rm -rf lambda_pkg
+# ── API Lambda (~10MB) ─────────────────────────────────────────────────────────
+echo "→ Building API Lambda (auth, intake, conversations)..."
+rm -rf api_lambda_pkg
+pip3 install $PY_FLAGS --target api_lambda_pkg -r requirements-api.txt -q
 
-SIZE=$(du -sh lambda.zip | cut -f1)
-echo "✓ lambda.zip ready ($SIZE)"
+cp -r services/ api_lambda_pkg/services/
+# Remove heavy services not needed in the API Lambda
+rm -rf api_lambda_pkg/services/ai \
+       api_lambda_pkg/services/bff \
+       api_lambda_pkg/services/mcp \
+       api_lambda_pkg/services/rag \
+       api_lambda_pkg/services/ingestion
 
-# ── MCP Lambda ─────────────────────────────────────────────────────────────────
-echo "→ Installing dependencies for MCP Lambda (Python 3.12, linux/x86_64)..."
+rm -f api_lambda.zip
+cd api_lambda_pkg && zip -r ../api_lambda.zip . -q && cd ..
+rm -rf api_lambda_pkg
+
+API_SIZE=$(du -sh api_lambda.zip | cut -f1)
+echo "✓ api_lambda.zip ($API_SIZE)"
+
+# ── AI Lambda (~50MB) ──────────────────────────────────────────────────────────
+echo "→ Building AI Lambda (search, ask, chat)..."
+rm -rf ai_lambda_pkg
+pip3 install $PY_FLAGS --target ai_lambda_pkg -r requirements.txt -q
+
+cp -r services/ ai_lambda_pkg/services/
+# Remove services not needed in the AI Lambda
+rm -rf ai_lambda_pkg/services/api \
+       ai_lambda_pkg/services/bff \
+       ai_lambda_pkg/services/mcp \
+       ai_lambda_pkg/services/ingestion
+
+rm -f ai_lambda.zip
+cd ai_lambda_pkg && zip -r ../ai_lambda.zip . -q && cd ..
+rm -rf ai_lambda_pkg
+
+AI_SIZE=$(du -sh ai_lambda.zip | cut -f1)
+echo "✓ ai_lambda.zip ($AI_SIZE)"
+
+# ── MCP Lambda (~50MB) ─────────────────────────────────────────────────────────
+echo "→ Building MCP Lambda..."
 rm -rf mcp_lambda_pkg
-pip3 install \
-  --platform manylinux2014_x86_64 \
-  --python-version 3.12 \
-  --only-binary=:all: \
-  --target mcp_lambda_pkg \
-  -r requirements.txt -q
+pip3 install $PY_FLAGS --target mcp_lambda_pkg -r requirements.txt -q
 
-echo "→ Copying MCP source files..."
-cp main.py mcp_lambda_pkg/
+cp mcp_server.py mcp_lambda_pkg/
 cp -r services/ mcp_lambda_pkg/services/
+rm -rf mcp_lambda_pkg/services/api \
+       mcp_lambda_pkg/services/ai \
+       mcp_lambda_pkg/services/bff \
+       mcp_lambda_pkg/services/ingestion
 
-echo "→ Zipping..."
-cd mcp_lambda_pkg
-zip -r ../mcp_lambda.zip . -q
-cd ..
+rm -f mcp_lambda.zip
+cd mcp_lambda_pkg && zip -r ../mcp_lambda.zip . -q && cd ..
 rm -rf mcp_lambda_pkg
 
 MCP_SIZE=$(du -sh mcp_lambda.zip | cut -f1)
-echo "✓ mcp_lambda.zip ready ($MCP_SIZE)"
+echo "✓ mcp_lambda.zip ($MCP_SIZE)"
+
+# ── Ingest Lambda (~40MB) ──────────────────────────────────────────────────────
+echo "→ Building Ingest Lambda (OCR, chunk, embed)..."
+rm -rf ingest_lambda_pkg
+pip3 install $PY_FLAGS --target ingest_lambda_pkg -r requirements-ingest.txt -q
+
+mkdir -p ingest_lambda_pkg/services/ingestion
+cp services/__init__.py ingest_lambda_pkg/services/__init__.py
+cp services/ingestion/__init__.py ingest_lambda_pkg/services/ingestion/__init__.py
+cp services/ingestion/handler.py  ingest_lambda_pkg/services/ingestion/handler.py
+
+rm -f ingest_lambda.zip
+cd ingest_lambda_pkg && zip -r ../ingest_lambda.zip . -q && cd ..
+rm -rf ingest_lambda_pkg
+
+INGEST_SIZE=$(du -sh ingest_lambda.zip | cut -f1)
+echo "✓ ingest_lambda.zip ($INGEST_SIZE)"
+
+echo ""
+echo "Done. Upload these zips to S3 then run: terraform apply"

@@ -25,7 +25,8 @@ type LegalMatter = {
 }
 
 type UploadedFile = {
-  id: string; name: string; size: number; category: string; dataUrl: string;
+  id: string; name: string; size: number; category: string;
+  s3Key: string | null; uploading: boolean; uploadError: string | null;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -296,10 +297,10 @@ function Step2({ data, onChange }: { data: LegalMatter; onChange: (d: LegalMatte
 // ── Step 3 ─────────────────────────────────────────────────────────────────────
 
 function Step3({
-  files, onAdd, onRemove, onCategoryChange,
+  files, onFilesSelected, onRemove, onCategoryChange,
 }: {
   files: UploadedFile[]
-  onAdd: (f: UploadedFile[]) => void
+  onFilesSelected: (f: File[]) => void
   onRemove: (id: string) => void
   onCategoryChange: (id: string, cat: string) => void
 }) {
@@ -309,25 +310,16 @@ function Step3({
 
   function processFiles(fileList: FileList) {
     const errs: string[] = []
-    const added: UploadedFile[] = []
+    const valid: File[] = []
     const remaining = MAX_FILES - files.length
 
     Array.from(fileList).slice(0, remaining).forEach(f => {
       if (f.size > MAX_FILE_SIZE) { errs.push(`${f.name}: exceeds 10 MB limit`); return }
-      const reader = new FileReader()
-      reader.onload = e => {
-        added.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          name: f.name, size: f.size,
-          category: 'Other',
-          dataUrl: e.target?.result as string,
-        })
-        if (added.length === Math.min(fileList.length, remaining)) onAdd([...added])
-      }
-      reader.readAsDataURL(f)
+      valid.push(f)
     })
     if (fileList.length > remaining) errs.push(`Only ${remaining} more file(s) can be added (limit: ${MAX_FILES})`)
     setErrors(errs)
+    if (valid.length) onFilesSelected(valid)
   }
 
   return (
@@ -376,20 +368,31 @@ function Step3({
       {files.length > 0 && (
         <div className="space-y-2">
           {files.map(f => (
-            <div key={f.id} className="flex items-start gap-3 bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+            <div key={f.id} className={`flex items-start gap-3 bg-white border rounded-xl p-3 shadow-sm ${f.uploadError ? 'border-rose-200' : 'border-gray-100'}`}>
               <div className="w-9 h-9 bg-gray-50 border border-gray-100 rounded-lg flex items-center justify-center shrink-0">
-                <Paperclip className="w-4 h-4 text-gray-400" />
+                {f.uploading
+                  ? <span className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin" />
+                  : f.uploadError
+                    ? <AlertCircle className="w-4 h-4 text-rose-400" />
+                    : <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                }
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{f.name}</p>
-                <p className="text-xs text-gray-400">{fmtSize(f.size)}</p>
-                <select
-                  className="mt-1.5 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  value={f.category}
-                  onChange={e => onCategoryChange(f.id, e.target.value)}
-                >
-                  {DOC_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
+                <p className="text-xs text-gray-400">
+                  {fmtSize(f.size)}
+                  {f.uploading && <span className="ml-2 text-emerald-600">Uploading…</span>}
+                  {f.uploadError && <span className="ml-2 text-rose-500">{f.uploadError}</span>}
+                </p>
+                {!f.uploading && !f.uploadError && (
+                  <select
+                    className="mt-1.5 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    value={f.category}
+                    onChange={e => onCategoryChange(f.id, e.target.value)}
+                  >
+                    {DOC_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                )}
               </div>
               <button onClick={() => onRemove(f.id)} className="text-gray-300 hover:text-gray-500 p-1 transition-colors shrink-0">
                 <X className="w-4 h-4" />
@@ -513,9 +516,14 @@ function Step4({
         </label>
       </div>
 
+      {files.some(f => f.uploading) && (
+        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-center">
+          Waiting for uploads to finish…
+        </p>
+      )}
       <button
         onClick={onSubmit}
-        disabled={!agreed || loading || (!personal.name || !matter.matterType || !matter.description || !matter.urgency)}
+        disabled={!agreed || loading || files.some(f => f.uploading) || (!personal.name || !matter.matterType || !matter.description || !matter.urgency)}
         className="w-full bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl h-12 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
       >
         {loading ? (
@@ -645,6 +653,31 @@ const field = 'w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-
 const DEFAULT_PERSONAL: PersonalInfo = { name: '', dob: '', street: '', suburb: '', state: 'NSW', postcode: '', phone: '', contact: 'either' }
 const DEFAULT_MATTER: LegalMatter = { matterType: '', subType: '', description: '', incidentDate: '', urgency: '', courtDate: '', courtRef: '', outcome: '' }
 
+const API = process.env.NEXT_PUBLIC_API_URL!
+
+async function uploadToS3(file: File, token: string | null): Promise<string> {
+  const urlRes = await fetch(`${API}/intake/upload-url`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      filename: file.name,
+      content_type: file.type || 'application/octet-stream',
+    }),
+  })
+  if (!urlRes.ok) throw new Error('Could not get upload URL')
+  const { upload_url, key } = await urlRes.json()
+  const putRes = await fetch(upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!putRes.ok) throw new Error('Upload to storage failed')
+  return key
+}
+
 export default function IntakePage() {
   const { user, token } = useAuth()
   const router = useRouter()
@@ -672,12 +705,33 @@ export default function IntakePage() {
     if (d.files)    setFiles(d.files)
   }, [])
 
-  // Save draft whenever data changes
+  // Jump to step from ?step= query param (e.g. "New case" from My Case page skips to Legal matter)
+  useEffect(() => {
+    const s = parseInt(new URLSearchParams(window.location.search).get('step') ?? '1', 10)
+    if (s >= 2 && s <= 4) setStep(s)
+  }, [])
+
+  // Save draft whenever data changes (s3Key is small — no large dataUrl to worry about)
   const saveCurrent = useCallback(() => {
     saveDraft({ personal, matter, files })
   }, [personal, matter, files])
 
   useEffect(() => { saveCurrent() }, [saveCurrent])
+
+  const handleFilesSelected = useCallback((rawFiles: File[]) => {
+    rawFiles.forEach(file => {
+      const entry: UploadedFile = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: file.name, size: file.size,
+        category: 'Other',
+        s3Key: null, uploading: true, uploadError: null,
+      }
+      setFiles(prev => [...prev, entry])
+      uploadToS3(file, token)
+        .then(key => setFiles(prev => prev.map(f => f.id === entry.id ? { ...f, s3Key: key, uploading: false } : f)))
+        .catch(() => setFiles(prev => prev.map(f => f.id === entry.id ? { ...f, uploading: false, uploadError: 'Upload failed' } : f)))
+    })
+  }, [token])
 
   function validateStep(): string {
     if (step === 1) {
@@ -711,7 +765,7 @@ if (err) { setStepError(err); return }
   async function handleSubmit() {
     setLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/intake`, {
+      const res = await fetch(`${API}/intake`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -720,14 +774,13 @@ if (err) { setStepError(err); return }
         body: JSON.stringify({
           personal,
           matter,
-          files: files.map(f => ({ name: f.name, size: f.size, category: f.category })),
+          files: files.map(f => ({ name: f.name, size: f.size, category: f.category, key: f.s3Key })),
         }),
       })
       if (!res.ok) throw new Error('Submission failed')
       const data = await res.json()
       saveDraft({ personal, matter, files, submittedAt: new Date().toISOString(), id: data.id })
-    } catch (e) {
-      // fall through — still show success even if API fails
+    } catch {
       saveDraft({ personal, matter, files, submittedAt: new Date().toISOString() })
     } finally {
       setLoading(false)
@@ -749,7 +802,7 @@ if (err) { setStepError(err); return }
         {step === 3 && (
           <Step3
             files={files}
-            onAdd={f => setFiles(prev => [...prev, ...f])}
+            onFilesSelected={handleFilesSelected}
             onRemove={id => setFiles(prev => prev.filter(f => f.id !== id))}
             onCategoryChange={(id, cat) => setFiles(prev => prev.map(f => f.id === id ? { ...f, category: cat } : f))}
           />

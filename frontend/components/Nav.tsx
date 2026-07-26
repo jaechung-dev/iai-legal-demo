@@ -11,7 +11,7 @@ import { APP_NAME, FEATURED_CASE } from '@/lib/config'
 const LINKS = [
   { href: '/chat/',    label: 'Chat',    Icon: MessageSquare },
   { href: '/search/',  label: 'Search',  Icon: Search        },
-  { href: '/intake/',  label: 'My Case', Icon: ClipboardList },
+  { href: '/my-case/', label: 'My Case', Icon: ClipboardList },
   { href: '/connect/', label: 'Connect', Icon: Plug          },
 ] as const
 

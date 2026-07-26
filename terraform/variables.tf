@@ -41,6 +41,15 @@ variable "backend_url" {
   default = "https://api.probonoai.com.au"
 }
 
+variable "basic_auth_user" {
+  default = "admin"
+}
+
+variable "basic_auth_password" {
+  sensitive = true
+  default   = "admin0000"
+}
+
 variable "google_client_id" {
   sensitive = true
   default   = ""

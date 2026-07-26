@@ -26,6 +26,40 @@ resource "random_id" "suffix" {
   byte_length = 4
 }
 
+# ── Basic auth gate (temporary — remove local + logic below to open access) ────
+
+locals {
+  basic_auth_b64 = base64encode("${var.basic_auth_user}:${var.basic_auth_password}")
+}
+
+# ── S3 — case document uploads ────────────────────────────────────────────────
+
+resource "aws_s3_bucket" "uploads" {
+  bucket = "${var.project}-uploads-${random_id.suffix.hex}"
+}
+
+resource "aws_s3_bucket_public_access_block" "uploads" {
+  bucket                  = aws_s3_bucket.uploads.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_cors_configuration" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+  cors_rule {
+    allowed_headers = ["Content-Type", "Content-Length"]
+    allowed_methods = ["PUT"]
+    allowed_origins = [
+      "https://www.probonoai.com.au",
+      "https://stage.probonoai.com.au",
+      "http://localhost:20001",
+    ]
+    max_age_seconds = 3600
+  }
+}
+
 # ── S3 — frontend static files ────────────────────────────────────────────────
 
 resource "aws_s3_bucket" "frontend" {
@@ -64,6 +98,47 @@ resource "aws_s3_bucket_policy" "frontend" {
 
 # ── CloudFront ────────────────────────────────────────────────────────────────
 
+# Rewrite directory-style paths to their index.html before S3 lookup.
+# S3 REST API (used with OAC) does not auto-serve index.html for directory
+# paths — /search/ would return 403 and fall through to the SPA fallback,
+# causing the home page to redirect authenticated users to /chat/.
+resource "aws_cloudfront_function" "spa_rewrite" {
+  name    = "${var.project}-spa-rewrite"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      var request = event.request;
+      var headers = request.headers;
+
+      // ── Basic auth gate ────────────────────────────────────────────────────
+      // To remove: delete these lines and re-apply terraform.
+      var expected = "Basic ${local.basic_auth_b64}";
+      var auth = headers.authorization ? headers.authorization.value : "";
+      if (auth !== expected) {
+        return {
+          statusCode: 401,
+          statusDescription: "Unauthorized",
+          headers: { "www-authenticate": { value: 'Basic realm="ProBonoAI"' } }
+        };
+      }
+      // ── End basic auth ─────────────────────────────────────────────────────
+
+      var uri = request.uri;
+      if (uri === '/') return request;
+      if (uri.endsWith('/')) {
+        request.uri = uri + 'index.html';
+        return request;
+      }
+      var filename = uri.slice(uri.lastIndexOf('/') + 1);
+      if (!filename.includes('.')) {
+        request.uri = uri + '/index.html';
+      }
+      return request;
+    }
+  EOF
+}
+
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "${var.project}-oac"
   origin_access_control_origin_type = "s3"
@@ -98,6 +173,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     min_ttl     = 0
     default_ttl = 86400
     max_ttl     = 31536000
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_rewrite.arn
+    }
   }
 
   # SPA fallback — serve index.html for unknown paths
