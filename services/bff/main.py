@@ -128,6 +128,21 @@ class IntakeRequest(BaseModel):
     files: list = []
 
 
+class ConversationCreate(BaseModel):
+    title: str = "New conversation"
+    case_id: str | None = None
+
+
+class ConversationPatch(BaseModel):
+    title: str
+
+
+class ConversationMessageItem(BaseModel):
+    role: str   # "user" | "assistant"
+    content: str
+    sources: list | None = None
+
+
 # ── Auth helper ────────────────────────────────────────────────────────────────
 
 
@@ -363,17 +378,22 @@ async def chat(req: ChatRequest, authorization: str = Header(default=None)):
         req.question[:120], len(req.messages), req.case_id, user,
     )
 
+    # Minimum similarity score for case chunks to be included in context/sources.
+    # Below this threshold the question is considered unrelated to the user's case.
+    MIN_CASE_SCORE = 0.42
+
     leg = LegislationRetriever(k=req.k, jurisdiction="NSW")
     cas = CaselawRetriever(k=req.k)
     all_docs = leg.invoke(req.question) + cas.invoke(req.question)
     if req.case_id:
-        case_docs = CaseChunkRetriever(case_id=req.case_id, k=req.k).invoke(req.question)
+        raw_case_docs = CaseChunkRetriever(case_id=req.case_id, k=req.k).invoke(req.question)
+        case_docs = [d for d in raw_case_docs if d.metadata.get("score", 0) >= MIN_CASE_SCORE]
         all_docs = case_docs + all_docs
 
     sources = [
         {
             "citation":    meta.get("citation") or meta.get("case_name") or meta.get("source", ""),
-            "content":     d.page_content[:300],
+            "content":     d.page_content,
             "score":       meta.get("score", 0),
             "source_type": meta.get("source", ""),
         }
@@ -406,6 +426,197 @@ async def chat(req: ChatRequest, authorization: str = Header(default=None)):
             "X-Accel-Buffering":           "no",
         },
     )
+
+
+# ── Conversation history ───────────────────────────────────────────────────────
+
+
+@app.get("/conversations")
+async def list_conversations(authorization: str = Header(default=None)):
+    user_id = _require_auth(authorization)
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, title, updated_at, case_id
+               FROM conversations
+               WHERE user_id = %s
+               ORDER BY updated_at DESC
+               LIMIT 50""",
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "id": str(r[0]),
+            "title": r[1],
+            "updated_at": r[2].isoformat(),
+            "case_id": r[3],
+        }
+        for r in rows
+    ]
+
+
+@app.post("/conversations", status_code=201)
+async def create_conversation(req: ConversationCreate, authorization: str = Header(default=None)):
+    user_id = _require_auth(authorization)
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO conversations (user_id, title, case_id)
+               VALUES (%s, %s, %s)
+               RETURNING id, title, updated_at, case_id""",
+            (user_id, req.title[:200], req.case_id),
+        )
+        row = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "id": str(row[0]),
+        "title": row[1],
+        "updated_at": row[2].isoformat(),
+        "case_id": row[3],
+    }
+
+
+@app.get("/conversations/{conv_id}")
+async def get_conversation(conv_id: str, authorization: str = Header(default=None)):
+    user_id = _require_auth(authorization)
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, title, updated_at, case_id, user_id FROM conversations WHERE id = %s",
+            (conv_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        if row[4] != user_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        cur.execute(
+            """SELECT id, role, content, sources, created_at
+               FROM conversation_messages
+               WHERE conversation_id = %s
+               ORDER BY created_at ASC""",
+            (conv_id,),
+        )
+        msgs = cur.fetchall()
+    finally:
+        conn.close()
+    return {
+        "id": str(row[0]),
+        "title": row[1],
+        "updated_at": row[2].isoformat(),
+        "case_id": row[3],
+        "messages": [
+            {
+                "id": str(m[0]),
+                "role": m[1],
+                "content": m[2],
+                "sources": m[3],
+                "created_at": m[4].isoformat(),
+            }
+            for m in msgs
+        ],
+    }
+
+
+@app.delete("/conversations/{conv_id}", status_code=204)
+async def delete_conversation(conv_id: str, authorization: str = Header(default=None)):
+    user_id = _require_auth(authorization)
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_id FROM conversations WHERE id = %s",
+            (conv_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        if row[0] != user_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        cur.execute("DELETE FROM conversations WHERE id = %s", (conv_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.patch("/conversations/{conv_id}")
+async def patch_conversation(conv_id: str, req: ConversationPatch, authorization: str = Header(default=None)):
+    user_id = _require_auth(authorization)
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_id FROM conversations WHERE id = %s",
+            (conv_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        if row[0] != user_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        cur.execute(
+            """UPDATE conversations SET title = %s, updated_at = NOW()
+               WHERE id = %s
+               RETURNING id, title, updated_at, case_id""",
+            (req.title[:200], conv_id),
+        )
+        updated = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return {
+        "id": str(updated[0]),
+        "title": updated[1],
+        "updated_at": updated[2].isoformat(),
+        "case_id": updated[3],
+    }
+
+
+@app.post("/conversations/{conv_id}/messages", status_code=201)
+async def append_messages(
+    conv_id: str,
+    messages: list[ConversationMessageItem],
+    authorization: str = Header(default=None),
+):
+    user_id = _require_auth(authorization)
+    if not messages:
+        raise HTTPException(status_code=400, detail="No messages provided")
+    conn = psycopg2.connect(DSN)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_id FROM conversations WHERE id = %s",
+            (conv_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        if row[0] != user_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        for msg in messages:
+            if msg.role not in ("user", "assistant"):
+                raise HTTPException(status_code=400, detail=f"Invalid role: {msg.role}")
+            cur.execute(
+                """INSERT INTO conversation_messages (conversation_id, role, content, sources)
+                   VALUES (%s, %s, %s, %s)""",
+                (conv_id, msg.role, msg.content, Json(msg.sources) if msg.sources else None),
+            )
+        cur.execute(
+            "UPDATE conversations SET updated_at = NOW() WHERE id = %s",
+            (conv_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "count": len(messages)}
 
 
 # ── Lambda handler ─────────────────────────────────────────────────────────────
