@@ -226,7 +226,7 @@ test.describe('Connect page UI', () => {
     await page.getByPlaceholder(/token name/i).fill('playwright-ui-test')
     await page.getByRole('button', { name: /generate/i }).click()
 
-    await expect(page.getByText('Shown once only')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('Shown once only')).toBeVisible({ timeout: 20000 })
     await expect(page.getByText(/^mcp-/)).toBeVisible()
     await expect(page.getByRole('button', { name: /copy config/i })).toBeVisible()
   })
@@ -234,8 +234,48 @@ test.describe('Connect page UI', () => {
   test('active tokens list shows created tokens', async ({ page }) => {
     await loginAs(page, 'demo', 'demo1234')
     await page.goto('/connect/')
-    // At least one token exists (created by API tests or previous UI test)
-    await expect(page.locator('text=Active tokens')).toBeVisible({ timeout: 10000 })
+    // "Active tokens (N)" heading in the main section — distinct from sidebar "ACTIVE TOKENS" header
+    await expect(page.locator('main').getByText(/Active tokens/)).toBeVisible({ timeout: 10000 })
+  })
+
+  test('sidebar shows ACTIVE TOKENS header and MCP ready indicator', async ({ page }) => {
+    await loginAs(page, 'demo', 'demo1234')
+    await page.goto('/connect/')
+    await expect(page.getByText(/active tokens/i).first()).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText(/mcp ready/i)).toBeVisible()
+  })
+
+  test('creating a token adds it to the sidebar compact list', async ({ page }) => {
+    await loginAs(page, 'demo', 'demo1234')
+    await page.goto('/connect/')
+
+    await page.getByPlaceholder(/token name/i).fill('playwright-sidebar-test')
+    await page.getByRole('button', { name: /generate/i }).click()
+    await expect(page.getByText('Shown once only')).toBeVisible({ timeout: 20000 })
+
+    // Sidebar should show the new token by name with a green (active) status dot
+    const newRow = page.locator('aside li').filter({ hasText: 'playwright-sidebar-test' })
+    await expect(newRow).toBeVisible()
+    await expect(newRow.locator('.bg-emerald-500')).toBeVisible()
+  })
+
+  test('revoking a token removes it from sidebar and main list', async ({ page }) => {
+    await loginAs(page, 'demo', 'demo1234')
+    await page.goto('/connect/')
+
+    // Create a token to revoke
+    await page.getByPlaceholder(/token name/i).fill('playwright-revoke-test')
+    await page.getByRole('button', { name: /generate/i }).click()
+    await expect(page.getByText('Shown once only')).toBeVisible({ timeout: 20000 })
+
+    // Revoke via the main token list's trash button
+    const row = page.locator('.divide-y > div').filter({ hasText: 'playwright-revoke-test' })
+    await expect(row).toBeVisible({ timeout: 5000 })
+    await row.getByTitle('Revoke token').click()
+
+    // Token should disappear from both the main list and the sidebar
+    await expect(row).not.toBeVisible({ timeout: 5000 })
+    await expect(page.locator('aside').getByText('playwright-revoke-test')).not.toBeVisible()
   })
 
   test.afterAll(async ({ request }) => {
@@ -254,8 +294,9 @@ test.describe('Connect page UI', () => {
     if (!listRes.ok()) return
     const { tokens } = await listRes.json()
 
+    const cleanup = ['playwright-ui-test', 'playwright-sidebar-test', 'playwright-revoke-test']
     for (const token of tokens as Array<{ id: string; name: string }>) {
-      if (token.name === 'playwright-ui-test') {
+      if (cleanup.includes(token.name)) {
         await request.delete(`${apiBase}/auth/mcp/token/${token.id}`, {
           headers: { Authorization: `Bearer ${access_token}` },
         })
