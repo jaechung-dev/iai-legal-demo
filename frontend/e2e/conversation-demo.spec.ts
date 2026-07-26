@@ -4,7 +4,7 @@
  */
 import { test, expect, request as playwrightRequest } from '@playwright/test'
 
-const API   = 'https://6arf47x0pk.execute-api.ap-southeast-2.amazonaws.com'
+const API   = 'https://api.probonoai.com.au'
 const EMAIL = 'jaechung0709@gmail.com'
 const PASS  = '23Neptune'
 const QUESTION = 'Who sent threatening messages and what did they say?'
@@ -40,11 +40,18 @@ test('conversation sidebar — Bella', async ({ page }) => {
   await page.waitForTimeout(2000)
   await page.screenshot({ path: SS('01-chat-logged-in'), fullPage: false })
 
-  // 2. Type a question
+  // 2. Type a question and register network listener BEFORE pressing Enter.
+  // POST /conversations fires immediately at the start of sendMessage (before
+  // the SSE stream), so waitForResponse must be set up first or it races.
   const input = page.getByPlaceholder(/ask a question about nsw law/i)
   await expect(input).toBeVisible({ timeout: 5000 })
   await input.fill(QUESTION)
   await page.screenshot({ path: SS('02-message-typed'), fullPage: false })
+
+  const convCreated = page.waitForResponse(
+    r => r.url().includes('/conversations') && r.request().method() === 'POST' && r.status() === 201,
+    { timeout: 20000 },
+  )
   await input.press('Enter')
 
   // 3. Wait for the user bubble in the CHAT AREA specifically (not sidebar text)
@@ -53,9 +60,7 @@ test('conversation sidebar — Bella', async ({ page }) => {
   await page.screenshot({ path: SS('03-user-message-sent'), fullPage: false })
 
   // 4. Wait for the NEW conversation to appear at the top of the sidebar.
-  // The sidebar is sorted by updated_at DESC so the new one is always first.
-  // We wait for POST /conversations to complete first (201), then check sidebar.
-  await page.waitForResponse(r => r.url().includes('/conversations') && r.request().method() === 'POST' && r.status() === 201, { timeout: 15000 })
+  await convCreated
   const convItem = page.locator('aside ul li button').first()
   await expect(convItem).toBeVisible({ timeout: 5000 })
   await page.screenshot({ path: SS('04-conversation-in-sidebar'), fullPage: false })

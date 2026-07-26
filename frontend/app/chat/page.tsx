@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, memo } from 'react'
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import {
   MessageSquare, Send, BookOpen, ChevronRight, X, SidebarOpen,
@@ -119,7 +119,7 @@ const SourceCard = memo(function SourceCard({ source: s, onResize }: SourceCardP
 
 type RowData = { sources: Source[]; onResize: (i: number, h: number) => void }
 
-function SourceRow({ index, style, data }: ListChildComponentProps<RowData>) {
+const SourceRow = memo(function SourceRow({ index, style, data }: ListChildComponentProps<RowData>) {
   const handleResize = useCallback(
     (h: number) => data.onResize(index, h),
     [data, index],
@@ -131,7 +131,7 @@ function SourceRow({ index, style, data }: ListChildComponentProps<RowData>) {
       </div>
     </div>
   )
-}
+})
 
 // ── Suggested prompts ─────────────────────────────────────────────────────────
 
@@ -388,6 +388,14 @@ export default function ChatPage() {
     [],
   )
 
+  // Stable itemData: only recreates when sources actually change, not on every
+  // render. Without this, a new object literal each render breaks SourceRow and
+  // SourceCard memo checks, causing ResizeObserver effects to fire every render.
+  const stableItemData = useMemo<RowData>(
+    () => ({ sources, onResize: handleSourceResize }),
+    [sources, handleSourceResize],
+  )
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -635,7 +643,7 @@ export default function ChatPage() {
                     width={width}
                     itemCount={sources.length}
                     itemSize={getSourceItemSize}
-                    itemData={{ sources, onResize: handleSourceResize }}
+                    itemData={stableItemData}
                     overscanCount={3}
                   >
                     {SourceRow}

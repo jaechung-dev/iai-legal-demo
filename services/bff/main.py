@@ -380,7 +380,7 @@ async def chat(req: ChatRequest, authorization: str = Header(default=None)):
 
     # Minimum similarity score for case chunks to be included in context/sources.
     # Below this threshold the question is considered unrelated to the user's case.
-    MIN_CASE_SCORE = 0.42
+    MIN_CASE_SCORE = 0.35
 
     leg = LegislationRetriever(k=req.k, jurisdiction="NSW")
     cas = CaselawRetriever(k=req.k)
