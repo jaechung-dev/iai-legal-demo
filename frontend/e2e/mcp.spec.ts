@@ -93,6 +93,9 @@ test.describe('MCP server — valid token', () => {
   })
 
   test('initialize returns 200 and a session ID', async ({ request }) => {
+    // Stateful MCP sessions require a dedicated server; Lambda/Mangum buffers SSE responses.
+    // Pass MCP_URL=http://localhost:20002 to run against a local MCP process.
+    test.skip(process.env.MCP_URL !== 'http://localhost:20002', 'requires local MCP server')
     const res = await request.post(`${MCP_URL}/mcp`, {
       headers: {
         'Content-Type': 'application/json',
@@ -108,6 +111,7 @@ test.describe('MCP server — valid token', () => {
   })
 
   test('tools/list returns search, ask, fetch, collections', async ({ request }) => {
+    test.skip(process.env.MCP_URL !== 'http://localhost:20002', 'requires local MCP server')
     // initialize first to get session id
     const initRes = await request.post(`${MCP_URL}/mcp`, {
       headers: {

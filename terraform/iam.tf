@@ -41,8 +41,10 @@ resource "aws_iam_role_policy" "github_actions" {
         Effect = "Allow"
         Action = ["lambda:UpdateFunctionCode", "lambda:GetFunction"]
         Resource = [
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}",
-          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}-mcp"
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}-api",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}-ai",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}-mcp",
+          "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.project}-ingest"
         ]
       },
       {
@@ -96,6 +98,53 @@ resource "aws_iam_role_policy" "lambda_ses" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_s3_uploads" {
+  name = "s3-uploads"
+  role = aws_iam_role.lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:PutObject", "s3:GetObject"]
+      Resource = "${aws_s3_bucket.uploads.arn}/*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_sqs_ingest" {
+  name = "sqs-ingest"
+  role = aws_iam_role.lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:ChangeMessageVisibility"
+      ]
+      Resource = [
+        aws_sqs_queue.ingest.arn,
+        aws_sqs_queue.ingest_dlq.arn
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_textract" {
+  name = "textract"
+  role = aws_iam_role.lambda.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["textract:DetectDocumentText", "textract:AnalyzeDocument"]
       Resource = "*"
     }]
   })

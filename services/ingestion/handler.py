@@ -115,6 +115,12 @@ def process_file(bucket: str, key: str) -> None:
     _store_chunks(user_id, case_id, chunks, embeddings)
     _mark_file_ready(user_id, case_id, key)
 
+    if case_id:
+        filename = Path(key).name
+        events = _extract_timeline_events(text, filename)
+        if events:
+            _store_timeline_events(case_id, key, events)
+
 
 # ── Parsing ────────────────────────────────────────────────────────────────────
 
@@ -234,6 +240,78 @@ def _get_latest_intake_id(user_id: str) -> str | None:
         )
         row = cur.fetchone()
         return str(row[0]) if row else None
+    finally:
+        conn.close()
+
+
+def _extract_timeline_events(text: str, filename: str) -> list[dict]:
+    """Ask GPT to pull dated events out of a document. Returns [] on failure."""
+    system = (
+        "You are a legal document analyser. Extract all events that have a specific date "
+        "from the document. Return a JSON object with key 'events' containing an array. "
+        "Each event: {date (ISO 8601 YYYY-MM-DD), category (one of: Court, Medical, "
+        "Police, Correspondence, Personal, Other), event_type (short noun phrase, "
+        "e.g. 'Bail hearing', 'Medical certificate', 'Email received'), "
+        "subject (one sentence title), summary (1-2 sentences plain English), "
+        "content (the most relevant verbatim excerpt from the document for this event, "
+        "up to 300 words)}. "
+        "Omit events without a clear date. Return {\"events\": []} if none found."
+    )
+    try:
+        resp = oai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": f"Document ({filename}):\n\n{text[:4000]}"},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        data = json.loads(resp.choices[0].message.content)
+        events = data.get("events", [])
+        logger.info("extracted %d timeline events from %s", len(events), filename)
+        return events
+    except Exception:
+        logger.exception("timeline extraction failed for %s", filename)
+        return []
+
+
+def _store_timeline_events(case_id: str, source_key: str, events: list[dict]) -> None:
+    """Embed and upsert timeline events into case_events. Re-upload safe: deletes old events from same source first."""
+    texts = [f"{e.get('subject', '')} {e.get('summary', '')}".strip() for e in events]
+    embeddings = _embed(texts)
+
+    filename = Path(source_key).name
+    conn = psycopg2.connect(DATABASE_URL)
+    try:
+        cur = conn.cursor()
+        # Remove previous events from this source file so re-uploads don't duplicate
+        cur.execute(
+            "DELETE FROM case_events WHERE case_id = %s AND attachments @> %s::jsonb",
+            (case_id, json.dumps([{"key": source_key}])),
+        )
+        for event, emb in zip(events, embeddings):
+            emb_str = "[" + ",".join(str(x) for x in emb) + "]"
+            cur.execute(
+                """
+                INSERT INTO case_events
+                    (case_id, date, category, event_type, subject, summary, content, attachments, embedding)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::vector)
+                """,
+                (
+                    case_id,
+                    event.get("date"),
+                    event.get("category", "Other"),
+                    event.get("event_type", ""),
+                    event.get("subject", ""),
+                    event.get("summary", ""),
+                    event.get("content", ""),
+                    json.dumps([{"key": source_key, "name": filename}]),
+                    emb_str,
+                ),
+            )
+        conn.commit()
+        logger.info("stored %d timeline events for case=%s", len(events), case_id)
     finally:
         conn.close()
 

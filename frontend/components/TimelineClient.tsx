@@ -15,15 +15,19 @@ export type CaseEvent = {
   attachments: { name: string; type: string; pages?: number }[]
 }
 
-const CATEGORIES = ['All', 'Offence', 'Investigation', 'Police', 'Court', 'Submissions', 'Verdict']
+const CATEGORIES = ['All', 'Court', 'Police', 'Medical', 'Correspondence', 'Personal', 'Offence', 'Investigation', 'Submissions', 'Verdict', 'Other']
 
 const COLORS: Record<string, { badge: string; dot: string; ring: string }> = {
-  Offence:       { badge: 'bg-rose-50 text-rose-700 border-rose-100',      dot: 'bg-rose-400',    ring: 'ring-rose-100' },
-  Investigation: { badge: 'bg-amber-50 text-amber-700 border-amber-100',   dot: 'bg-amber-400',   ring: 'ring-amber-100' },
-  Police:        { badge: 'bg-sky-50 text-sky-700 border-sky-100',         dot: 'bg-sky-400',     ring: 'ring-sky-100' },
-  Court:         { badge: 'bg-violet-50 text-violet-700 border-violet-100', dot: 'bg-violet-400', ring: 'ring-violet-100' },
-  Submissions:   { badge: 'bg-yellow-50 text-yellow-700 border-yellow-100', dot: 'bg-yellow-400', ring: 'ring-yellow-100' },
-  Verdict:       { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-400', ring: 'ring-emerald-100' },
+  Offence:        { badge: 'bg-rose-50 text-rose-700 border-rose-100',        dot: 'bg-rose-400',    ring: 'ring-rose-100' },
+  Investigation:  { badge: 'bg-amber-50 text-amber-700 border-amber-100',     dot: 'bg-amber-400',   ring: 'ring-amber-100' },
+  Police:         { badge: 'bg-sky-50 text-sky-700 border-sky-100',           dot: 'bg-sky-400',     ring: 'ring-sky-100' },
+  Court:          { badge: 'bg-violet-50 text-violet-700 border-violet-100',  dot: 'bg-violet-400',  ring: 'ring-violet-100' },
+  Submissions:    { badge: 'bg-yellow-50 text-yellow-700 border-yellow-100',  dot: 'bg-yellow-400',  ring: 'ring-yellow-100' },
+  Verdict:        { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-400', ring: 'ring-emerald-100' },
+  Medical:        { badge: 'bg-teal-50 text-teal-700 border-teal-100',        dot: 'bg-teal-400',    ring: 'ring-teal-100' },
+  Correspondence: { badge: 'bg-indigo-50 text-indigo-700 border-indigo-100',  dot: 'bg-indigo-400',  ring: 'ring-indigo-100' },
+  Personal:       { badge: 'bg-pink-50 text-pink-700 border-pink-100',        dot: 'bg-pink-400',    ring: 'ring-pink-100' },
+  Other:          { badge: 'bg-gray-50 text-gray-600 border-gray-100',        dot: 'bg-gray-300',    ring: 'ring-gray-100' },
 }
 const DEFAULT = { badge: 'bg-gray-50 text-gray-600 border-gray-100', dot: 'bg-gray-300', ring: 'ring-gray-100' }
 
@@ -32,12 +36,15 @@ export default function TimelineClient({ events }: { events: CaseEvent[] }) {
   const [filter, setFilter] = useState('All')
 
   const filtered = filter === 'All' ? events : events.filter(e => e.category === filter)
+  const presentCats = CATEGORIES.filter(cat =>
+    cat === 'All' || events.some(e => e.category === cat)
+  )
 
   return (
     <>
-      {/* Category filter chips */}
+      {/* Category filter chips — only show categories that have events */}
       <div className="flex gap-2 flex-wrap mb-6">
-        {CATEGORIES.map(cat => {
+        {presentCats.map(cat => {
           const count = cat === 'All' ? events.length : events.filter(e => e.category === cat).length
           const c = cat === 'All' ? null : (COLORS[cat] || DEFAULT)
           return (

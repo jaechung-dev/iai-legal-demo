@@ -17,6 +17,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import AsyncIterator
+from uuid import uuid4
 
 import psycopg2
 from psycopg2.extras import Json
@@ -122,6 +123,11 @@ class ChatRequest(BaseModel):
     k: int = 5
 
 
+class UploadUrlRequest(BaseModel):
+    filename: str
+    content_type: str = "application/octet-stream"
+
+
 class IntakeRequest(BaseModel):
     personal: dict
     matter: dict
@@ -218,6 +224,17 @@ app.include_router(auth_router)
 # Seed demo users
 seed_db()
 
+# ── S3 client (boto3 is provided by the Lambda runtime; not in requirements.txt) ──
+
+UPLOADS_BUCKET = os.getenv("UPLOADS_BUCKET", "")
+_AWS_REGION = os.getenv("AWS_REGION_NAME", "ap-southeast-2")
+
+try:
+    import boto3 as _boto3
+    _s3 = _boto3.client("s3", region_name=_AWS_REGION)
+except ImportError:
+    _s3 = None
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 
@@ -231,6 +248,21 @@ def health():
     except Exception as e:
         db = str(e)
     return {"status": "ok", "db": db, "model": CHAT_MODEL}
+
+
+@app.post("/intake/upload-url")
+async def intake_upload_url(req: UploadUrlRequest, authorization: str = Header(default=None)):
+    if not _s3 or not UPLOADS_BUCKET:
+        raise HTTPException(status_code=501, detail="File uploads not configured")
+    user_id = _get_user_from_header(authorization)
+    safe_name = os.path.basename(req.filename)
+    key = f"intakes/{user_id}/{uuid4()}/{safe_name}"
+    url = _s3.generate_presigned_url(
+        "put_object",
+        Params={"Bucket": UPLOADS_BUCKET, "Key": key, "ContentType": req.content_type},
+        ExpiresIn=300,
+    )
+    return {"upload_url": url, "key": key}
 
 
 @app.post("/intake")
