@@ -57,9 +57,30 @@ function decode(token: string): User {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser]       = useState<User | null>(null)
-  const [token, setToken]     = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Synchronously derive initial auth state from localStorage so the very
+  // first render is already authenticated (no FOUC). The static HTML is
+  // always pre-rendered unauthenticated, so body needs suppressHydrationWarning.
+  const [user, setUser] = useState<User | null>(() => {
+    const ls = safeStorage()
+    const t = ls?.getItem('iai_token')
+    if (t && !isExpired(t)) return decode(t)
+    return null
+  })
+  const [token, setToken] = useState<string | null>(() => {
+    const ls = safeStorage()
+    const t = ls?.getItem('iai_token')
+    if (t && !isExpired(t)) return t
+    return null
+  })
+  // loading = true only when we have a refresh token but no valid access token
+  // (need a network round-trip). False otherwise — avoids spinner on valid session.
+  const [loading, setLoading] = useState<boolean>(() => {
+    const ls = safeStorage()
+    if (!ls) return false
+    const t = ls.getItem('iai_token')
+    if (t && !isExpired(t)) return false
+    return !!ls.getItem('iai_refresh')
+  })
 
   const _store = useCallback((access: string, refresh?: string) => {
     const ls = safeStorage()
@@ -92,24 +113,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [_store])
 
-  // On mount: restore session or silently refresh
+  // On mount: token/user are already set from the synchronous initializers above.
+  // This effect only handles two async cases:
+  //   1. Valid token expiring soon → pre-emptive background refresh
+  //   2. Expired token but valid refresh token → refresh before marking not-loading
   useEffect(() => {
     const ls = safeStorage()
     if (!ls) { setLoading(false); return }
     const t = ls.getItem('iai_token')
     const r = ls.getItem('iai_refresh')
     if (t && !isExpired(t)) {
-      setToken(t)
-      setUser(decode(t))
-      setLoading(false)
-      // Pre-emptively refresh if expiring in < 5 min
       if (r && isExpiringSoon(t)) refreshAuth()
     } else if (r) {
       refreshAuth().finally(() => setLoading(false))
     } else {
       ls.removeItem('iai_token')
       ls.removeItem('iai_refresh')
-      setLoading(false)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
