@@ -9,19 +9,10 @@ resource "aws_acm_certificate" "frontend" {
   }
 }
 
+# Validation records are created in dns.tf (aws_route53_record.cert_validation).
+# Terraform resolves the dependency automatically via the fqdn reference below.
 resource "aws_acm_certificate_validation" "frontend" {
   provider                = aws.us_east_1
   certificate_arn         = aws_acm_certificate.frontend.arn
-  validation_record_fqdns = [for r in aws_acm_certificate.frontend.domain_validation_options : r.resource_record_name]
-}
-
-output "cert_validation_records" {
-  description = "Add these DNS records to GoDaddy to validate the ACM certificate"
-  value = {
-    for dvo in aws_acm_certificate.frontend.domain_validation_options : dvo.domain_name => {
-      name  = dvo.resource_record_name
-      type  = dvo.resource_record_type
-      value = dvo.resource_record_value
-    }
-  }
+  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
