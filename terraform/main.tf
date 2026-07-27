@@ -53,7 +53,7 @@ resource "aws_s3_bucket_cors_configuration" "uploads" {
     allowed_methods = ["PUT"]
     allowed_origins = [
       "https://www.probonoai.com.au",
-      "https://stage.probonoai.com.au",
+      "https://preview.probonoai.com.au",
       "http://localhost:20001",
     ]
     max_age_seconds = 3600
@@ -110,17 +110,21 @@ resource "aws_cloudfront_function" "spa_rewrite" {
     function handler(event) {
       var request = event.request;
       var headers = request.headers;
+      var host = headers.host ? headers.host.value : "";
 
-      // ── Basic auth gate ────────────────────────────────────────────────────
-      // To remove: delete these lines and re-apply terraform.
-      var expected = "Basic ${local.basic_auth_b64}";
-      var auth = headers.authorization ? headers.authorization.value : "";
-      if (auth !== expected) {
-        return {
-          statusCode: 401,
-          statusDescription: "Unauthorized",
-          headers: { "www-authenticate": { value: 'Basic realm="ProBonoAI"' } }
-        };
+      // ── Basic auth — preview subdomain only ────────────────────────────────
+      // www.probonoai.com.au is public. preview.probonoai.com.au is gated.
+      // To open preview to the public: remove the if block and re-apply.
+      if (host === "preview.probonoai.com.au") {
+        var expected = "Basic ${local.basic_auth_b64}";
+        var auth = headers.authorization ? headers.authorization.value : "";
+        if (auth !== expected) {
+          return {
+            statusCode: 401,
+            statusDescription: "Unauthorized",
+            headers: { "www-authenticate": { value: 'Basic realm="ProBonoAI Preview"' } }
+          };
+        }
       }
       // ── End basic auth ─────────────────────────────────────────────────────
 
@@ -150,7 +154,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   enabled             = true
   default_root_object = "index.html"
   price_class         = "PriceClass_100"  # US/EU/Asia only — cheapest
-  aliases             = ["probonoai.com.au", "www.probonoai.com.au", "stage.probonoai.com.au"]
+  aliases             = ["probonoai.com.au", "www.probonoai.com.au", "preview.probonoai.com.au"]
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
