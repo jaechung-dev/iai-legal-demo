@@ -1,24 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
-import { Search, MessageSquare, ChevronDown, Clock, X, Menu, ChevronUp, ExternalLink } from 'lucide-react'
+import { Search, MessageSquare, ChevronDown, Clock, X, Menu } from 'lucide-react'
 import Nav from '../components/Nav'
 import LoginModal from '../components/LoginModal'
+import SearchResult from '../components/search/SearchResult'
 import { useGuestQuota } from '@/hooks/useGuestQuota'
 import { API_URL as API } from '@/lib/config'
-import type { SearchResult, Mode, SearchSource, RecentSearch } from '@/types/search'
+import type { SearchResult as SearchResultType, Mode, SearchSource, RecentSearch } from '@/types/search'
 
 const SOURCE_LABELS: Record<SearchSource, string> = {
-  legislation: 'Legislation',
-  caselaw:     'Caselaw',
-  both:        'Both',
-  case_events: 'Case Events',
+  legislation: 'Legislation', caselaw: 'Caselaw', both: 'Both', case_events: 'Case Events',
 }
-
 const SOURCE_COLORS: Record<SearchSource, string> = {
-  legislation: 'bg-violet-100 text-violet-700',
-  caselaw:     'bg-sky-100 text-sky-700',
-  both:        'bg-gray-100 text-gray-600',
-  case_events: 'bg-emerald-100 text-emerald-700',
+  legislation: 'bg-violet-100 text-violet-700', caselaw: 'bg-sky-100 text-sky-700',
+  both: 'bg-gray-100 text-gray-600', case_events: 'bg-emerald-100 text-emerald-700',
 }
 
 const STORAGE_KEY = 'search_recents'
@@ -27,30 +22,28 @@ const MAX_RECENTS = 20
 function loadRecents(): RecentSearch[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
 }
-
 function saveRecent(entry: RecentSearch) {
   const prev = loadRecents().filter(r => r.query !== entry.query || r.mode !== entry.mode)
   localStorage.setItem(STORAGE_KEY, JSON.stringify([entry, ...prev].slice(0, MAX_RECENTS)))
 }
-
 function timeAgo(ts: number): string {
   const m = Math.floor((Date.now() - ts) / 60000)
-  if (m < 1)   return 'Just now'
-  if (m < 60)  return `${m}m ago`
+  if (m < 1) return 'Just now'
+  if (m < 60) return `${m}m ago`
   const h = Math.floor(m / 60)
-  if (h < 24)  return `${h}h ago`
+  if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
 }
 
 export default function SearchPage() {
-  const [mode, setMode]       = useState<Mode>('search')
-  const [query, setQuery]     = useState('')
-  const [source, setSource]   = useState<SearchSource>('legislation')
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [answer, setAnswer]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [recents, setRecents] = useState<RecentSearch[]>([])
+  const [mode, setMode]         = useState<Mode>('search')
+  const [query, setQuery]       = useState('')
+  const [source, setSource]     = useState<SearchSource>('legislation')
+  const [results, setResults]   = useState<SearchResultType[]>([])
+  const [answer, setAnswer]     = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
+  const [recents, setRecents]   = useState<RecentSearch[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const { gate, showGate, dismissGate } = useGuestQuota()
@@ -58,73 +51,55 @@ export default function SearchPage() {
   useEffect(() => { setRecents(loadRecents()) }, [])
 
   const pushRecent = useCallback((q: string, m: Mode, s: SearchSource) => {
-    const entry = { query: q, mode: m, source: s, ts: Date.now() }
-    saveRecent(entry)
+    saveRecent({ query: q, mode: m, source: s, ts: Date.now() })
     setRecents(loadRecents())
   }, [])
 
   async function doSearch(q = query, s = source) {
-    if (!q.trim()) return
-    if (!gate()) return
+    if (!q.trim() || !gate()) return
     setLoading(true); setResults([]); setError('')
     try {
       const r = await fetch(`${API}/search`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ query: q, source: s, k: 8 }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, source: s, k: 8 }),
       })
       if (!r.ok) throw new Error(`Server error ${r.status}`)
       const d = await r.json()
-      setResults(d.results)
-      pushRecent(q, 'search', s)
+      setResults(d.results); pushRecent(q, 'search', s)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not reach the API')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   async function doAsk(q = query, s = source) {
-    if (!q.trim()) return
-    if (!gate()) return
+    if (!q.trim() || !gate()) return
     setLoading(true); setAnswer(''); setError('')
     try {
       await fetchEventSource(`${API}/ask`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        openWhenHidden: true,
-        body:    JSON.stringify({ question: q, source: s, k: 6 }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, openWhenHidden: true,
+        body: JSON.stringify({ question: q, source: s, k: 6 }),
         onmessage(ev) {
           if (ev.data === '[DONE]') return
-          try {
-            const chunk = JSON.parse(ev.data)
-            if (chunk.text) setAnswer(prev => prev + chunk.text)
-          } catch {}
+          try { const chunk = JSON.parse(ev.data); if (chunk.text) setAnswer(prev => prev + chunk.text) } catch {}
         },
-        onclose() {},
-        onerror(err) { throw err },
+        onclose() {}, onerror(err) { throw err },
       })
       pushRecent(q, 'ask', s)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not reach the API')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   function runRecent(r: RecentSearch) {
-    setQuery(r.query)
-    setSource(r.source)
-    setMode(r.mode)
-    setResults([]); setAnswer(''); setError('')
-    setSidebarOpen(false)
+    setQuery(r.query); setSource(r.source); setMode(r.mode)
+    setResults([]); setAnswer(''); setError(''); setSidebarOpen(false)
     if (r.mode === 'search') doSearch(r.query, r.source)
     else doAsk(r.query, r.source)
   }
 
-  function clearRecents() {
-    localStorage.removeItem(STORAGE_KEY)
-    setRecents([])
+  function handleAsk(title: string) {
+    setMode('ask'); setQuery(`Explain ${title} in plain English`)
+    setExpandedIdx(null); setResults([]); setAnswer('')
   }
 
   return (
@@ -139,8 +114,7 @@ export default function SearchPage() {
 
           <aside className={`
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            lg:translate-x-0
-            fixed lg:relative z-30 lg:z-auto
+            lg:translate-x-0 fixed lg:relative z-30 lg:z-auto
             top-0 left-0 h-full lg:h-auto
             w-[240px] shrink-0 flex flex-col
             bg-zinc-950 border-r border-zinc-800
@@ -152,7 +126,6 @@ export default function SearchPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-
             <div className="flex-1 overflow-y-auto py-2">
               {recents.length === 0 ? (
                 <p className="text-xs text-zinc-600 text-center px-4 py-8 leading-relaxed">Your searches will appear here</p>
@@ -183,10 +156,9 @@ export default function SearchPage() {
                 </ul>
               )}
             </div>
-
             {recents.length > 0 && (
               <div className="px-3 py-3 border-t border-zinc-800">
-                <button onClick={clearRecents}
+                <button onClick={() => { localStorage.removeItem(STORAGE_KEY); setRecents([]) }}
                   className="w-full text-xs text-zinc-600 hover:text-zinc-400 py-2 transition-colors">
                   Clear history
                 </button>
@@ -217,13 +189,10 @@ export default function SearchPage() {
                     <button key={m}
                       onClick={() => { setMode(m); setResults([]); setAnswer(''); setError('') }}
                       className={`flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg transition-all ${
-                        mode === m
-                          ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                          : 'text-gray-500 hover:text-gray-700'
+                        mode === m ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-700'
                       }`}
                     >
-                      <Icon className="w-3.5 h-3.5" />
-                      {label}
+                      <Icon className="w-3.5 h-3.5" />{label}
                     </button>
                   ))}
                 </div>
@@ -266,9 +235,7 @@ export default function SearchPage() {
                           <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                           {mode === 'search' ? 'Searching' : 'Asking'}
                         </span>
-                      ) : (
-                        mode === 'search' ? 'Search' : 'Ask'
-                      )}
+                      ) : (mode === 'search' ? 'Search' : 'Ask')}
                     </button>
                   </div>
                 </div>
@@ -283,52 +250,15 @@ export default function SearchPage() {
                   <p className="text-xs text-gray-400 font-medium">
                     {results.length} result{results.length !== 1 ? 's' : ''} for &ldquo;{query}&rdquo;
                   </p>
-                  {results.map((r, i) => {
-                    const expanded = expandedIdx === i
-                    const title = r.metadata.citation || r.metadata.case_name || r.metadata.source
-                    const austliiQuery = encodeURIComponent(title)
-                    const austliiUrl = `https://www.austlii.edu.au/cgi-bin/sinodisp/au/legis/nsw/consol_act/?query=${austliiQuery}`
-                    return (
-                      <div key={i} className={`bg-white border rounded-xl shadow-sm transition-all cursor-pointer ${expanded ? 'border-emerald-200 shadow-emerald-50' : 'border-gray-100 hover:shadow-md hover:border-gray-200'}`}>
-                        <button
-                          className="w-full text-left p-5"
-                          onClick={() => setExpandedIdx(expanded ? null : i)}
-                        >
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <p className="text-sm font-semibold text-gray-900 leading-snug">{title}</p>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                  <div className="h-1.5 bg-emerald-400 rounded-full" style={{ width: `${Math.round(r.metadata.score * 100)}%` }} />
-                                </div>
-                                <span className="text-xs text-gray-400 tabular-nums">{Math.round(r.metadata.score * 100)}%</span>
-                              </div>
-                              {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                            </div>
-                          </div>
-                          <p className={`text-sm text-gray-600 leading-relaxed ${expanded ? '' : 'line-clamp-3'}`}>{r.content}</p>
-                        </button>
-                        {expanded && (
-                          <div className="px-5 pb-4 flex items-center gap-3 border-t border-gray-50 pt-3">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setMode('ask'); setQuery(`Explain ${title} in plain English`); setExpandedIdx(null); setResults([]); setAnswer('') }}
-                              className="flex items-center gap-1.5 text-xs bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg transition-all"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" /> Ask about this
-                            </button>
-                            <a
-                              href={`https://www.austlii.edu.au/cgi-bin/sino/search/search.cgi?query=${austliiQuery}&meta=+[2020]+&mask_path=au/legis/nsw`}
-                              target="_blank" rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg transition-all"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" /> View on AustLII
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                  {results.map((r, i) => (
+                    <SearchResult
+                      key={i}
+                      result={r}
+                      expanded={expandedIdx === i}
+                      onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
+                      onAsk={handleAsk}
+                    />
+                  ))}
                 </div>
               )}
 
@@ -349,8 +279,7 @@ export default function SearchPage() {
                   <div className="px-5 py-5">
                     <div className="max-h-[60vh] overflow-y-auto">
                       <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                        {answer}
-                        {loading && <span className="animate-pulse text-emerald-400">▌</span>}
+                        {answer}{loading && <span className="animate-pulse text-emerald-400">▌</span>}
                       </p>
                     </div>
                   </div>
