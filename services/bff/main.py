@@ -156,7 +156,7 @@ def _get_user_from_header(authorization: str = None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         return "anon"
     try:
-        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG])
+        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG], audience="probonoai-api")
         return claims.get("sub", "anon")
     except Exception:
         return "anon"
@@ -167,7 +167,7 @@ def _require_auth(authorization: str | None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG])
+        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG], audience="probonoai-api")
         user_id = claims.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -197,7 +197,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         auth = request.headers.get("authorization", "")
         if auth.startswith("Bearer "):
             try:
-                payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG])
+                payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG], audience="probonoai-api")
                 user = payload.get("sub", "-")
             except Exception:
                 pass

@@ -6,6 +6,8 @@ Routes: /search  /ask  /chat
 import json
 import asyncio
 import logging
+import time
+from typing import Any
 
 import psycopg2
 from fastapi import FastAPI, Header, HTTPException
@@ -13,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from jose import jwt
 from mangum import Mangum
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from services.core.settings import settings
 from services.core.middleware import AccessLogMiddleware
@@ -43,12 +45,23 @@ logger = logging.getLogger(__name__)
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
 
+VALID_SOURCES = {"legislation", "caselaw", "case_events", "both"}
+VALID_ROLES   = {"user", "assistant"}
+
+
 class SearchRequest(BaseModel):
     query: str
     source: str = "legislation"
     jurisdiction: str = "NSW"
     case_id: str = "nguyen"
     k: int = 5
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        if v not in VALID_SOURCES:
+            raise ValueError(f"source must be one of {VALID_SOURCES}")
+        return v
 
 
 class AskRequest(BaseModel):
@@ -58,10 +71,24 @@ class AskRequest(BaseModel):
     case_id: str = "nguyen"
     k: int = 4
 
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        if v not in VALID_SOURCES:
+            raise ValueError(f"source must be one of {VALID_SOURCES}")
+        return v
+
 
 class ChatMessage(BaseModel):
     role: str
     content: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        if v not in VALID_ROLES:
+            raise ValueError(f"role must be one of {VALID_ROLES}")
+        return v
 
 
 class ChatRequest(BaseModel):
@@ -78,7 +105,7 @@ def _get_user_from_header(authorization: str = None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         return "anon"
     try:
-        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG])
+        claims = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG], audience="probonoai-api")
         return claims.get("sub", "anon")
     except Exception:
         return "anon"
@@ -133,7 +160,10 @@ app.add_middleware(
 
 
 @app.post("/search")
-async def search(req: SearchRequest, authorization: str = Header(default=None)):
+async def search(
+    req: SearchRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
     user = _get_user_from_header(authorization)
     if req.source == "caselaw":
         retriever = CaselawRetriever(k=req.k)
@@ -161,7 +191,10 @@ async def search(req: SearchRequest, authorization: str = Header(default=None)):
 
 
 @app.post("/ask")
-async def ask(req: AskRequest, authorization: str = Header(default=None)):
+async def ask(
+    req: AskRequest,
+    authorization: str | None = Header(default=None),
+) -> StreamingResponse:
     user = _get_user_from_header(authorization)
 
     if req.source == "both":
@@ -189,7 +222,10 @@ async def ask(req: AskRequest, authorization: str = Header(default=None)):
 
 
 @app.post("/chat")
-async def chat(req: ChatRequest, authorization: str = Header(default=None)):
+async def chat(
+    req: ChatRequest,
+    authorization: str | None = Header(default=None),
+) -> StreamingResponse:
     user = _get_user_from_header(authorization)
 
     MIN_CASE_SCORE = 0.35

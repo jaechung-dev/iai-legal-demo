@@ -85,12 +85,12 @@ class OTPVerifyRequest(BaseModel):
 
 class OAuthTokenRequest(BaseModel):
     api_key: str
-    scopes: list[str] = ["search", "ask", "chat"]
+    scopes: list[str] = ["search", "ask", "chat"]  # noqa: RUF012
 
 
 class MCPTokenRequest(BaseModel):
     name: str = "My MCP Token"
-    scopes: list[str] = ["search", "ask", "fetch", "collections"]
+    scopes: list[str] = ["search", "ask", "fetch", "collections"]  # noqa: RUF012
     expires_days: int = 365
 
 
@@ -132,15 +132,18 @@ def _db_user(email: str) -> dict | None:
 
 
 def _make_jwt(
-    sub: str, name: str, role: str, scopes: list[str],
-    hours: int = 1, email_verified: bool = True,
+    user_id: str, name: str, role: str, scopes: list[str],
+    hours: int = 1, email: str = "", email_verified: bool = True,
 ) -> str:
     return jwt.encode({
-        "sub":            sub,
+        "sub":            user_id,
+        "email":          email,
         "name":           name,
         "role":           role,
         "scopes":         scopes,
         "email_verified": email_verified,
+        "iss":            "probonoai.com.au",
+        "aud":            "probonoai-api",
         "exp":            datetime.now(timezone.utc) + timedelta(hours=hours),
     }, JWT_SECRET, algorithm=JWT_ALG)
 
@@ -149,7 +152,7 @@ def _issue(
     user_id: str, email: str, name: str, role: str,
     email_verified: bool = True,
 ) -> dict:
-    access = _make_jwt(email, name, role, SCOPES, hours=1, email_verified=email_verified)
+    access = _make_jwt(user_id, name, role, SCOPES, hours=1, email=email, email_verified=email_verified)
     raw    = secrets.token_urlsafe(48)
     exp    = datetime.now(timezone.utc) + timedelta(days=30)
     with _db() as conn:
@@ -177,16 +180,13 @@ def require_auth(authorization: str | None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Bearer token required")
     try:
-        p = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG])
+        p = jwt.decode(authorization[7:], JWT_SECRET, algorithms=[JWT_ALG], audience="probonoai-api")
     except Exception:
         raise HTTPException(401, "Invalid or expired token")
     sub = p.get("sub", "")
-    if sub in SEED_IDS:
-        return SEED_IDS[sub]
-    user = _db_user(sub)
-    if not user:
-        raise HTTPException(401, "User not found")
-    return user["id"]
+    if not sub:
+        raise HTTPException(401, "Invalid token")
+    return sub
 
 
 # ── Email helpers ──────────────────────────────────────────────────────────────
@@ -249,6 +249,21 @@ def seed_db():
         print(f"SEED_ERROR {e}", flush=True)
 
 
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+
+
+async def _rate_limit(key: str, max_attempts: int = 5, window: int = 900) -> None:
+    """Increment attempt counter per key; raise 429 if over limit. No-op when Redis unavailable."""
+    redis = await get_redis()
+    if redis is None:
+        return
+    count = await redis.incr(key)
+    if count == 1:
+        await redis.expire(key, window)
+    if count > max_attempts:
+        raise HTTPException(429, "Too many attempts. Please wait 15 minutes and try again.")
+
+
 # ── Router ─────────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -295,7 +310,8 @@ def auth_register(req: RegisterRequest):
 
 
 @router.post("/login")
-def auth_login(req: LoginRequest):
+async def auth_login(req: LoginRequest):
+    await _rate_limit(f"rate:login:{req.username.lower().strip()}")
     seed = SEED_USERS.get(req.username)
     if seed and seed["password"] == req.password:
         tokens = _issue(
@@ -364,7 +380,7 @@ def auth_me(authorization: str = Header(default=None)):
     except Exception:
         raise HTTPException(401, "Invalid or expired token")
     return {
-        "username":       p.get("sub"),
+        "username":       p.get("email"),
         "name":           p.get("name"),
         "role":           p.get("role"),
         "email_verified": p.get("email_verified", True),
@@ -392,8 +408,9 @@ def auth_verify_email(token: str = Query(...)):
 
 
 @router.post("/verify-otp")
-def auth_verify_otp(req: OTPVerifyRequest):
+async def auth_verify_otp(req: OTPVerifyRequest):
     email = req.email.lower().strip()
+    await _rate_limit(f"rate:otp:{email}")
     user  = _db_user(email)
     if not user:
         raise HTTPException(400, "Invalid or expired code")
