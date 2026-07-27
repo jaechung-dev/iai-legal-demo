@@ -1,36 +1,20 @@
-'use client'
-
 import { useState, useEffect, useCallback } from 'react'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { Search, MessageSquare, ChevronDown, Clock, X, Menu } from 'lucide-react'
-import Nav from '@/components/Nav'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import LoginModal from '@/components/LoginModal'
+import Nav from '../components/Nav'
+import LoginModal from '../components/LoginModal'
 import { useGuestQuota } from '@/hooks/useGuestQuota'
 import { API_URL as API } from '@/lib/config'
+import type { SearchResult, Mode, SearchSource, RecentSearch } from '@/types/search'
 
-type SearchResult = {
-  content: string
-  metadata: { citation?: string; case_name?: string; score: number; source: string }
-}
-type Mode = 'search' | 'ask'
-type Source = 'legislation' | 'caselaw' | 'both' | 'case_events'
-
-type RecentSearch = {
-  query: string
-  mode: Mode
-  source: Source
-  ts: number
-}
-
-const SOURCE_LABELS: Record<Source, string> = {
+const SOURCE_LABELS: Record<SearchSource, string> = {
   legislation: 'Legislation',
   caselaw:     'Caselaw',
   both:        'Both',
   case_events: 'Case Events',
 }
 
-const SOURCE_COLORS: Record<Source, string> = {
+const SOURCE_COLORS: Record<SearchSource, string> = {
   legislation: 'bg-violet-100 text-violet-700',
   caselaw:     'bg-sky-100 text-sky-700',
   both:        'bg-gray-100 text-gray-600',
@@ -61,7 +45,7 @@ function timeAgo(ts: number): string {
 export default function SearchPage() {
   const [mode, setMode]       = useState<Mode>('search')
   const [query, setQuery]     = useState('')
-  const [source, setSource]   = useState<Source>('legislation')
+  const [source, setSource]   = useState<SearchSource>('legislation')
   const [results, setResults] = useState<SearchResult[]>([])
   const [answer, setAnswer]   = useState('')
   const [loading, setLoading] = useState(false)
@@ -72,7 +56,7 @@ export default function SearchPage() {
 
   useEffect(() => { setRecents(loadRecents()) }, [])
 
-  const pushRecent = useCallback((q: string, m: Mode, s: Source) => {
+  const pushRecent = useCallback((q: string, m: Mode, s: SearchSource) => {
     const entry = { query: q, mode: m, source: s, ts: Date.now() }
     saveRecent(entry)
     setRecents(loadRecents())
@@ -148,13 +132,10 @@ export default function SearchPage() {
       <div className="h-screen flex flex-col bg-gray-50">
         <Nav />
         <div className="flex flex-1 min-h-0 overflow-hidden">
-
-          {/* Mobile backdrop */}
           {sidebarOpen && (
             <div className="lg:hidden fixed inset-0 bg-black/40 z-20" onClick={() => setSidebarOpen(false)} />
           )}
 
-          {/* Sidebar */}
           <aside className={`
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
             lg:translate-x-0
@@ -166,27 +147,20 @@ export default function SearchPage() {
           `}>
             <div className="flex items-center justify-between px-4 pt-5 pb-4 border-b border-zinc-800">
               <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Recent searches</p>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="lg:hidden text-zinc-500 hover:text-zinc-300 p-1 rounded"
-              >
+              <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-zinc-500 hover:text-zinc-300 p-1 rounded">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto py-2">
               {recents.length === 0 ? (
-                <p className="text-xs text-zinc-600 text-center px-4 py-8 leading-relaxed">
-                  Your searches will appear here
-                </p>
+                <p className="text-xs text-zinc-600 text-center px-4 py-8 leading-relaxed">Your searches will appear here</p>
               ) : (
                 <ul>
                   {recents.map((r, i) => (
                     <li key={i}>
-                      <button
-                        onClick={() => runRecent(r)}
-                        className="w-full text-left px-3 py-2.5 group flex flex-col gap-1 text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
-                      >
+                      <button onClick={() => runRecent(r)}
+                        className="w-full text-left px-3 py-2.5 group flex flex-col gap-1 text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors">
                         <div className="flex items-start gap-1.5 min-w-0">
                           {r.mode === 'search'
                             ? <Search className="w-3 h-3 shrink-0 mt-0.5 opacity-50" />
@@ -211,19 +185,15 @@ export default function SearchPage() {
 
             {recents.length > 0 && (
               <div className="px-3 py-3 border-t border-zinc-800">
-                <button
-                  onClick={clearRecents}
-                  className="w-full text-xs text-zinc-600 hover:text-zinc-400 py-2 transition-colors"
-                >
+                <button onClick={clearRecents}
+                  className="w-full text-xs text-zinc-600 hover:text-zinc-400 py-2 transition-colors">
                   Clear history
                 </button>
               </div>
             )}
           </aside>
 
-          {/* Main content */}
           <main className="flex-1 min-w-0 overflow-y-auto">
-            {/* Mobile header */}
             <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-10">
               <button onClick={() => setSidebarOpen(true)} className="text-gray-500 hover:text-gray-800 p-1">
                 <Menu className="w-5 h-5" />
@@ -232,24 +202,18 @@ export default function SearchPage() {
             </div>
 
             <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-8">
-
-              {/* Header */}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Search &amp; Ask</h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  Search NSW legislation and caselaw, or ask a legal question in plain English
-                </p>
+                <p className="text-sm text-gray-500 mt-1">Search NSW legislation and caselaw, or ask a legal question in plain English</p>
               </div>
 
-              {/* Mode + input */}
               <div className="space-y-3">
                 <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
                   {([
                     { m: 'search' as Mode, Icon: Search,        label: 'Search' },
                     { m: 'ask'    as Mode, Icon: MessageSquare, label: 'Ask'    },
                   ]).map(({ m, Icon, label }) => (
-                    <button
-                      key={m}
+                    <button key={m}
                       onClick={() => { setMode(m); setResults([]); setAnswer(''); setError('') }}
                       className={`flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-lg transition-all ${
                         mode === m
@@ -282,7 +246,7 @@ export default function SearchPage() {
                       <select
                         className="appearance-none border border-gray-200 rounded-xl pl-3 pr-8 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-700 shadow-sm cursor-pointer"
                         value={source}
-                        onChange={e => setSource(e.target.value as Source)}
+                        onChange={e => setSource(e.target.value as SearchSource)}
                       >
                         <option value="legislation">Legislation</option>
                         <option value="caselaw">Caselaw</option>
@@ -309,14 +273,10 @@ export default function SearchPage() {
                 </div>
               </div>
 
-              {/* Error */}
               {error && (
-                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
-                  {error}
-                </div>
+                <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>
               )}
 
-              {/* Search results */}
               {mode === 'search' && results.length > 0 && (
                 <div className="space-y-3">
                   <p className="text-xs text-gray-400 font-medium">
@@ -330,10 +290,7 @@ export default function SearchPage() {
                         </p>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-1.5 bg-emerald-400 rounded-full"
-                              style={{ width: `${Math.round(r.metadata.score * 100)}%` }}
-                            />
+                            <div className="h-1.5 bg-emerald-400 rounded-full" style={{ width: `${Math.round(r.metadata.score * 100)}%` }} />
                           </div>
                           <span className="text-xs text-gray-400 tabular-nums">{Math.round(r.metadata.score * 100)}%</span>
                         </div>
@@ -344,7 +301,6 @@ export default function SearchPage() {
                 </div>
               )}
 
-              {/* Ask streaming answer */}
               {mode === 'ask' && (answer || loading) && (
                 <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
                   <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 bg-gray-50">
@@ -360,19 +316,17 @@ export default function SearchPage() {
                     )}
                   </div>
                   <div className="px-5 py-5">
-                    <ScrollArea className="max-h-[60vh]">
+                    <div className="max-h-[60vh] overflow-y-auto">
                       <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                         {answer}
                         {loading && <span className="animate-pulse text-emerald-400">▌</span>}
                       </p>
-                    </ScrollArea>
+                    </div>
                   </div>
                 </div>
               )}
-
             </div>
           </main>
-
         </div>
       </div>
     </>

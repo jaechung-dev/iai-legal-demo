@@ -1,19 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Paperclip } from 'lucide-react'
-export type CaseEvent = {
-  date: string
-  category: string
-  event_type: string
-  subject: string
-  summary: string
-  content: string
-  attachments: { name: string; type: string; pages?: number }[]
-}
+import { useState, useEffect } from 'react'
+import { Paperclip, X } from 'lucide-react'
+export type { CaseEvent } from '@/types/case'
+import type { CaseEvent } from '@/types/case'
 
 const CATEGORIES = ['All', 'Court', 'Police', 'Medical', 'Correspondence', 'Personal', 'Offence', 'Investigation', 'Submissions', 'Verdict', 'Other']
 
@@ -120,55 +110,58 @@ export default function TimelineClient({ events }: { events: CaseEvent[] }) {
         })}
       </div>
 
-      {/* Detail dialog */}
-      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
-          {selected && (
-            <>
-              <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${(COLORS[selected.category] || DEFAULT).badge}`}>
-                    {selected.category}
-                  </span>
-                  <span className="text-xs text-gray-400 font-mono tabular-nums">{selected.date}</span>
-                </div>
-                <DialogTitle className="text-base font-semibold text-gray-900 leading-snug text-left">
-                  {selected.subject}
-                </DialogTitle>
-                {selected.summary && (
-                  <p className="text-sm text-gray-500 mt-1 leading-relaxed text-left">{selected.summary}</p>
-                )}
-              </DialogHeader>
-              <ScrollArea className="flex-1">
-                <div className="px-6 py-5">
-                  <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
-                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                      {selected.content}
-                    </p>
-                  </div>
-                  {selected.attachments && selected.attachments.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Attachments</p>
-                      <div className="flex gap-2 flex-wrap">
-                        {selected.attachments.map((a: { name: string; type: string; pages?: number }, idx: number) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 font-medium shadow-sm"
-                          >
-                            <Paperclip className="w-3 h-3 text-gray-400" />
-                            {a.name}
-                            {a.pages && <span className="text-gray-400">· {a.pages}p</span>}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Detail modal */}
+      {selected && <EventModal event={selected} onClose={() => setSelected(null)} />}
     </>
+  )
+}
+
+function EventModal({ event: e, onClose }: { event: CaseEvent; onClose: () => void }) {
+  const c = COLORS[e.category] || DEFAULT
+  useEffect(() => {
+    const handler = (ev: KeyboardEvent) => { if (ev.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden"
+        onClick={ev => ev.stopPropagation()}>
+        <div className="px-6 pt-6 pb-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${c.badge}`}>
+                {e.category}
+              </span>
+              <span className="text-xs text-gray-400 font-mono tabular-nums">{e.date}</span>
+            </div>
+            <button onClick={onClose} className="shrink-0 p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-all">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <h2 className="text-base font-semibold text-gray-900 leading-snug">{e.subject}</h2>
+          {e.summary && <p className="text-sm text-gray-500 mt-1 leading-relaxed">{e.summary}</p>}
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
+            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{e.content}</p>
+          </div>
+          {e.attachments && e.attachments.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Attachments</p>
+              <div className="flex gap-2 flex-wrap">
+                {e.attachments.map((a, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 font-medium shadow-sm">
+                    <Paperclip className="w-3 h-3 text-gray-400" />
+                    {a.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

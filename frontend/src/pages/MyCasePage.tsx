@@ -1,40 +1,16 @@
-'use client'
-
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import Nav from '@/components/Nav'
-import TimelineClient, { CaseEvent } from '@/components/TimelineClient'
+import { Link, useNavigate } from 'react-router-dom'
+import Nav from '../components/Nav'
+import TimelineClient from '@/components/TimelineClient'
 import { useAuth } from '@/context/auth'
 import { API_URL as API } from '@/lib/config'
 import {
   LayoutDashboard, CalendarDays, FolderOpen, FileText, UserCircle,
   Plus, Trash2, Upload, CheckCircle2, AlertCircle, Key, LogOut,
-  Paperclip, X, ChevronRight, Menu,
+  X, ChevronRight, Menu,
 } from 'lucide-react'
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-type FileMeta = { name: string; size: number; category: string; key: string | null }
-
-type CaseSummary = {
-  id: string
-  matter: { matterType?: string; subType?: string; urgency?: string; description?: string; courtDate?: string }
-  file_count: number
-  created_at: string
-}
-
-type CaseDetail = {
-  id: string
-  personal: Record<string, string>
-  matter: Record<string, string>
-  files: FileMeta[]
-  created_at: string
-}
-
-type UploadState = { id: string; name: string; size: number; uploading: boolean; error: string | null }
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
+import type { FileMeta, CaseSummary, CaseDetail, UploadState } from '@/types/case'
+import type { CaseEvent } from '@/components/TimelineClient'
 
 const MATTER_LABELS: Record<string, string> = {
   criminal: 'Criminal', family: 'Family', civil: 'Civil',
@@ -62,8 +38,6 @@ function fmtSize(b: number) {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
-
-// ── Shared UI ──────────────────────────────────────────────────────────────────
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -94,8 +68,6 @@ function Spinner() {
   )
 }
 
-// ── Section: Summary ───────────────────────────────────────────────────────────
-
 function SummarySection({ detail }: { detail: CaseDetail | null }) {
   if (!detail) return <Spinner />
   const { personal: p, matter: m, files, created_at } = detail
@@ -118,9 +90,7 @@ function SummarySection({ detail }: { detail: CaseDetail | null }) {
         <Row label="Name" value={p.name} />
         <Row label="Date of birth" value={p.dob} />
         <Row label="Phone" value={p.phone} />
-        {p.suburb && (
-          <Row label="Location" value={[p.suburb, p.state, p.postcode].filter(Boolean).join(', ')} />
-        )}
+        {p.suburb && <Row label="Location" value={[p.suburb, p.state, p.postcode].filter(Boolean).join(', ')} />}
         <Row label="Preferred contact" value={p.contact} />
       </Card>
       <Card title={`Documents (${files.length})`}>
@@ -129,7 +99,7 @@ function SummarySection({ detail }: { detail: CaseDetail | null }) {
         ) : (
           files.map((f, i) => (
             <div key={i} className="flex items-center gap-2 text-sm">
-              <Paperclip className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className="w-3.5 h-3.5 text-gray-400 shrink-0">📎</span>
               <span className="text-gray-700 truncate">{f.name}</span>
               <span className="text-xs text-gray-400 shrink-0">· {f.category}</span>
             </div>
@@ -140,15 +110,12 @@ function SummarySection({ detail }: { detail: CaseDetail | null }) {
   )
 }
 
-// ── Section: Timeline ──────────────────────────────────────────────────────────
-
 function TimelineSection({ caseId }: { caseId: string }) {
   const [events, setEvents] = useState<CaseEvent[] | null>(null)
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    setEvents(null)
-    setErr('')
+    setEvents(null); setErr('')
     fetch(`${API}/case/${caseId}/timeline`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
@@ -171,8 +138,6 @@ function TimelineSection({ caseId }: { caseId: string }) {
     </div>
   )
 }
-
-// ── Section: Manage Cases ──────────────────────────────────────────────────────
 
 function CasesSection({
   cases, activeCaseId, token, onActivate, onDeleted,
@@ -202,18 +167,15 @@ function CasesSection({
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-900">Manage Cases</h2>
-        <Link
-          href="/intake/?step=2"
-          className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all shadow-sm"
-        >
+        <Link to="/intake?step=2"
+          className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all shadow-sm">
           <Plus className="w-4 h-4" /> New case
         </Link>
       </div>
-
       {cases.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-gray-100 rounded-2xl">
           <p className="text-sm text-gray-400 mb-3">No cases submitted yet.</p>
-          <Link href="/intake/?step=2" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1 justify-center">
+          <Link to="/intake?step=2" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1 justify-center">
             Submit your first case <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
@@ -222,23 +184,16 @@ function CasesSection({
           {cases.map(c => {
             const active = c.id === activeCaseId
             return (
-              <div
-                key={c.id}
-                className={`flex items-center gap-4 p-4 bg-white rounded-xl border shadow-sm transition-all ${
-                  active ? 'border-emerald-200 ring-1 ring-emerald-200/50' : 'border-gray-100 hover:border-gray-200'
-                }`}
-              >
+              <div key={c.id} className={`flex items-center gap-4 p-4 bg-white rounded-xl border shadow-sm transition-all ${
+                active ? 'border-emerald-200 ring-1 ring-emerald-200/50' : 'border-gray-100 hover:border-gray-200'
+              }`}>
                 <button onClick={() => onActivate(c.id)} className="flex-1 text-left min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-gray-800">
                       {MATTER_LABELS[c.matter?.matterType ?? ''] ?? c.matter?.matterType ?? 'Case'}
                     </span>
-                    {c.matter?.subType && (
-                      <span className="text-xs text-gray-400">· {c.matter.subType}</span>
-                    )}
-                    {active && (
-                      <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Active</span>
-                    )}
+                    {c.matter?.subType && <span className="text-xs text-gray-400">· {c.matter.subType}</span>}
+                    {active && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Active</span>}
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {fmtDate(c.created_at)} · {c.file_count} document{c.file_count !== 1 ? 's' : ''}
@@ -260,8 +215,6 @@ function CasesSection({
     </div>
   )
 }
-
-// ── Section: Manage Documents ──────────────────────────────────────────────────
 
 function DocumentsSection({
   detail, caseId, token, onFilesUpdated,
@@ -287,14 +240,12 @@ function DocumentsSection({
     if (!res.ok) throw new Error('Failed to update documents')
   }
 
-  const MAX_FILE_BYTES = 25 * 1024 * 1024
-
   function handleFileInput(fileList: FileList) {
     Array.from(fileList).forEach(async file => {
       const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}`
       setPending(p => [...p, { id: uid, name: file.name, size: file.size, uploading: true, error: null }])
       try {
-        if (file.size > MAX_FILE_BYTES) throw new Error('File exceeds 25 MB limit')
+        if (file.size > 25 * 1024 * 1024) throw new Error('File exceeds 25 MB limit')
         const urlRes = await fetch(`${API}/intake/upload-url`, {
           method: 'POST',
           headers: {
@@ -316,9 +267,7 @@ function DocumentsSection({
         onFilesUpdated(updated)
         setPending(p => p.filter(u => u.id !== uid))
       } catch (e) {
-        setPending(p => p.map(u =>
-          u.id === uid ? { ...u, uploading: false, error: (e as Error).message } : u
-        ))
+        setPending(p => p.map(u => u.id === uid ? { ...u, uploading: false, error: (e as Error).message } : u))
       }
     })
   }
@@ -339,24 +288,18 @@ function DocumentsSection({
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-900">Manage Documents</h2>
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all shadow-sm"
-        >
+        <button onClick={() => inputRef.current?.click()}
+          className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-4 py-2 rounded-xl transition-all shadow-sm">
           <Upload className="w-4 h-4" /> Add documents
         </button>
-        <input
-          ref={inputRef} type="file" className="hidden" multiple
+        <input ref={inputRef} type="file" className="hidden" multiple
           accept=".pdf,.doc,.docx,.txt,.eml,.jpg,.jpeg,.png,.tiff"
-          onChange={e => e.target.files && handleFileInput(e.target.files)}
-        />
+          onChange={e => e.target.files && handleFileInput(e.target.files)} />
       </div>
 
       {files.length === 0 && pending.length === 0 ? (
-        <div
-          onClick={() => inputRef.current?.click()}
-          className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition-all"
-        >
+        <div onClick={() => inputRef.current?.click()}
+          className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition-all">
           <Upload className="w-8 h-8 text-gray-300 mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-600">Upload documents</p>
           <p className="text-xs text-gray-400 mt-1">PDF, Word, email (.eml), images · 25 MB max</p>
@@ -379,10 +322,7 @@ function DocumentsSection({
                   {DOC_CATS.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
-              <button
-                onClick={() => removeFile(i)}
-                className="text-gray-300 hover:text-red-400 p-1 transition-colors shrink-0 mt-0.5"
-              >
+              <button onClick={() => removeFile(i)} className="text-gray-300 hover:text-red-400 p-1 transition-colors shrink-0 mt-0.5">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -412,11 +352,9 @@ function DocumentsSection({
   )
 }
 
-// ── Section: My Information ────────────────────────────────────────────────────
-
 function ProfileSection() {
   const { user, logout } = useAuth()
-  const router = useRouter()
+  const navigate = useNavigate()
   if (!user) return null
 
   return (
@@ -429,10 +367,8 @@ function ProfileSection() {
       </Card>
       <Card title="Security">
         <div className="py-1">
-          <Link
-            href="/forgot-password/"
-            className="inline-flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 hover:border-gray-300 px-4 py-2.5 rounded-xl transition-all shadow-sm font-medium"
-          >
+          <Link to="/forgot-password"
+            className="inline-flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 hover:border-gray-300 px-4 py-2.5 rounded-xl transition-all shadow-sm font-medium">
             <Key className="w-4 h-4 text-gray-400" /> Change password
           </Link>
         </div>
@@ -440,7 +376,7 @@ function ProfileSection() {
       <Card title="Session">
         <div className="py-1">
           <button
-            onClick={async () => { await logout(); router.push('/login/') }}
+            onClick={async () => { await logout(); navigate('/login') }}
             className="inline-flex items-center gap-2 text-sm text-red-500 hover:text-red-600 font-medium transition-colors"
           >
             <LogOut className="w-4 h-4" /> Sign out
@@ -450,8 +386,6 @@ function ProfileSection() {
     </div>
   )
 }
-
-// ── Sidebar nav ────────────────────────────────────────────────────────────────
 
 const SECTIONS = [
   { id: 'summary',   label: 'Summary',          Icon: LayoutDashboard },
@@ -463,11 +397,9 @@ const SECTIONS = [
 
 type SectionId = typeof SECTIONS[number]['id']
 
-// ── Main page ──────────────────────────────────────────────────────────────────
-
 export default function MyCasePage() {
   const { user, token, loading: authLoading } = useAuth()
-  const router = useRouter()
+  const navigate = useNavigate()
   const [section, setSection] = useState<SectionId>('summary')
   const [cases, setCases] = useState<CaseSummary[]>([])
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
@@ -476,8 +408,8 @@ export default function MyCasePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    if (!authLoading && !user) router.replace('/login/')
-  }, [authLoading, user, router])
+    if (!authLoading && !user) navigate('/login', { replace: true })
+  }, [authLoading, user, navigate])
 
   useEffect(() => {
     if (!token) return
@@ -504,24 +436,17 @@ export default function MyCasePage() {
   const handleDeleted = useCallback((id: string) => {
     setCases(prev => {
       const next = prev.filter(c => c.id !== id)
-      if (activeCaseId === id) {
-        setActiveCaseId(next[0]?.id ?? null)
-        setDetail(null)
-      }
+      if (activeCaseId === id) { setActiveCaseId(next[0]?.id ?? null); setDetail(null) }
       return next
     })
   }, [activeCaseId])
 
   const handleFilesUpdated = useCallback((files: FileMeta[]) => {
     setDetail(prev => prev ? { ...prev, files } : prev)
-    setCases(prev => prev.map(c =>
-      c.id === activeCaseId ? { ...c, file_count: files.length } : c
-    ))
+    setCases(prev => prev.map(c => c.id === activeCaseId ? { ...c, file_count: files.length } : c))
   }, [activeCaseId])
 
-  if (authLoading) return (
-    <div className="h-screen flex flex-col bg-gray-50"><Nav /><Spinner /></div>
-  )
+  if (authLoading) return <div className="h-screen flex flex-col bg-gray-50"><Nav /><Spinner /></div>
   if (!user) return null
 
   const noCases = !loadingCases && cases.length === 0
@@ -532,13 +457,10 @@ export default function MyCasePage() {
     <div className="h-screen flex flex-col bg-gray-50">
       <Nav />
       <div className="flex flex-1 min-h-0 overflow-hidden">
-
-        {/* Mobile backdrop */}
         {sidebarOpen && (
           <div className="lg:hidden fixed inset-0 bg-black/40 z-20" onClick={() => setSidebarOpen(false)} />
         )}
 
-        {/* Sidebar */}
         <aside className={`
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0
@@ -562,11 +484,8 @@ export default function MyCasePage() {
             {SECTIONS.map(({ id, label, Icon }) => {
               const disabled = noCases && id !== 'cases' && id !== 'profile'
               return (
-                <button
-                  key={id}
-                  onClick={() => {
-                    if (!disabled) { setSection(id); setSidebarOpen(false) }
-                  }}
+                <button key={id}
+                  onClick={() => { if (!disabled) { setSection(id); setSidebarOpen(false) } }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left ${
                     section === id
                       ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
@@ -583,18 +502,14 @@ export default function MyCasePage() {
           </nav>
 
           <div className="px-3 py-3 border-t border-zinc-800">
-            <Link
-              href="/intake/?step=2"
-              className="flex items-center gap-2 w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium px-3 py-2.5 rounded-lg transition-colors"
-            >
+            <Link to="/intake?step=2"
+              className="flex items-center gap-2 w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium px-3 py-2.5 rounded-lg transition-colors">
               <Plus className="w-4 h-4 shrink-0" /> New case
             </Link>
           </div>
         </aside>
 
-        {/* Main content */}
         <main className="flex-1 min-w-0 overflow-y-auto">
-          {/* Mobile header bar */}
           <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-10">
             <button onClick={() => setSidebarOpen(true)} className="text-gray-500 hover:text-gray-800 p-1">
               <Menu className="w-5 h-5" />
@@ -605,7 +520,6 @@ export default function MyCasePage() {
           </div>
 
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-            {/* No-case prompt for sections that need a case */}
             {needsCase ? (
               <div className="text-center py-20">
                 <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
@@ -615,10 +529,8 @@ export default function MyCasePage() {
                 <p className="text-sm text-gray-500 mb-6 max-w-xs mx-auto">
                   Submit your case details and documents to unlock the full dashboard.
                 </p>
-                <Link
-                  href="/intake/?step=2"
-                  className="inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-all shadow-sm"
-                >
+                <Link to="/intake?step=2"
+                  className="inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium px-5 py-2.5 rounded-xl transition-all shadow-sm">
                   <Plus className="w-4 h-4" /> Start intake
                 </Link>
               </div>
@@ -648,7 +560,6 @@ export default function MyCasePage() {
             )}
           </div>
         </main>
-
       </div>
     </div>
   )

@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /search/
+
+# Authenticated pages — no value to crawlers
+Disallow: /chat/
+Disallow: /my-case/
+Disallow: /connect/
+Disallow: /intake/
+Disallow: /auth/
+
+Sitemap: https://www.probonoai.com.au/sitemap.xml

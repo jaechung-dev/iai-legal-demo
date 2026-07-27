@@ -1,6 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, test, expect, beforeEach, vi } from 'vitest'
-import ForgotPasswordPage from '@/app/forgot-password/page'
+import ForgotPasswordPage from '@/src/pages/ForgotPasswordPage'
+
+function renderPage() {
+  return render(<MemoryRouter><ForgotPasswordPage /></MemoryRouter>)
+}
 
 describe('ForgotPasswordPage', () => {
   beforeEach(() => {
@@ -8,20 +13,20 @@ describe('ForgotPasswordPage', () => {
   })
 
   test('renders the email form', () => {
-    render(<ForgotPasswordPage />)
+    renderPage()
     expect(screen.getByRole('heading', { name: /forgot password/i })).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /send reset link/i })).toBeInTheDocument()
   })
 
   test('has a link back to sign in', () => {
-    render(<ForgotPasswordPage />)
+    renderPage()
     const link = screen.getByRole('link', { name: /sign in/i })
-    expect(link).toHaveAttribute('href', '/login/')
+    expect(link).toHaveAttribute('href', '/login')
   })
 
   test('shows check inbox message after submit', async () => {
-    render(<ForgotPasswordPage />)
+    renderPage()
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), {
       target: { value: 'test@example.com' },
     })
@@ -32,7 +37,7 @@ describe('ForgotPasswordPage', () => {
   })
 
   test('shows the submitted email in the success message', async () => {
-    render(<ForgotPasswordPage />)
+    renderPage()
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), {
       target: { value: 'user@example.com' },
     })
@@ -43,7 +48,7 @@ describe('ForgotPasswordPage', () => {
   })
 
   test('shows back to sign in link after success', async () => {
-    render(<ForgotPasswordPage />)
+    renderPage()
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), {
       target: { value: 'test@example.com' },
     })
@@ -54,7 +59,7 @@ describe('ForgotPasswordPage', () => {
 
   test('shows error message on network failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')))
-    render(<ForgotPasswordPage />)
+    renderPage()
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), {
       target: { value: 'test@example.com' },
     })

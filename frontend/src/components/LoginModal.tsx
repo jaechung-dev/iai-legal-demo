@@ -1,7 +1,5 @@
-'use client'
-
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useNavigate } from 'react-router-dom'
 import { X, ArrowRight, Check, Scale } from 'lucide-react'
 import { useAuth } from '@/context/auth'
 import { API_URL as API, APP_NAME } from '@/lib/config'
@@ -15,7 +13,7 @@ const FEATURES = [
 
 export default function LoginModal({ onClose }: { onClose: () => void }) {
   const { login } = useAuth()
-  const router = useRouter()
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -27,7 +25,7 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
     setLoading(true)
     try {
       await login(username, password)
-      router.push('/chat/')
+      navigate('/chat')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
@@ -36,24 +34,17 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
   }
 
   function fillDemo(u: string, p: string) {
-    setUsername(u)
-    setPassword(p)
-    setError('')
+    setUsername(u); setPassword(p); setError('')
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
-
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"
-        >
+        <button onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all">
           <X className="w-4 h-4" />
         </button>
 
-        {/* Header */}
         <div className="bg-zinc-950 px-8 pt-8 pb-6">
           <div className="flex items-center gap-2.5 mb-4">
             <div className="w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
@@ -75,15 +66,10 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Form */}
         <div className="px-8 py-6 space-y-4">
-          <button
-            type="button"
-            onClick={() => { window.location.href = `${API}/auth/google` }}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 rounded-xl h-11 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
-          >
-            <GoogleIcon />
-            Continue with Google
+          <button type="button" onClick={() => { window.location.href = `${API}/auth/google` }}
+            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 rounded-xl h-11 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
+            <GoogleIcon />Continue with Google
           </button>
 
           <div className="relative flex items-center gap-3">
@@ -93,40 +79,20 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
-            <input
-              className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
-              placeholder="Username"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-            />
-            <input
-              type="password"
-              className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
-              placeholder="Password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-            {error && (
-              <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
-                {error}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl h-11 text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
-            >
+            <input className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+              placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required />
+            <input type="password" className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+              placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" required />
+            {error && <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>}
+            <button type="submit" disabled={loading}
+              className="w-full bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl h-11 text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg">
               {loading ? 'Signing in…' : <><span>Sign in</span><ArrowRight className="w-4 h-4" /></>}
             </button>
           </form>
 
           <div className="flex items-center justify-between text-xs text-gray-500">
-            <a href="/forgot-password/" className="text-emerald-600 hover:underline">Forgot password?</a>
-            <a href="/register/" className="text-emerald-600 hover:underline">Create account</a>
+            <a href="/forgot-password" className="text-emerald-600 hover:underline">Forgot password?</a>
+            <a href="/register" className="text-emerald-600 hover:underline">Create account</a>
           </div>
 
           <div className="relative flex items-center gap-3">
@@ -135,25 +101,16 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
             <div className="flex-1 border-t border-gray-200" />
           </div>
 
-          <div className="space-y-2">
-            {[
-              { label: 'Guest', sub: 'Guest access', u: 'demo', p: 'demo1234' },
-            ].map(({ label, sub, u, p }) => (
-              <button
-                key={u}
-                onClick={() => fillDemo(u, p)}
-                className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all group shadow-sm"
-              >
-                <div className="text-left">
-                  <p className="text-sm font-medium text-gray-800">{label}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-                </div>
-                <span className="text-xs text-emerald-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                  Autofill <ArrowRight className="w-3 h-3" />
-                </span>
-              </button>
-            ))}
-          </div>
+          <button onClick={() => fillDemo('demo', 'demo1234')}
+            className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all group shadow-sm">
+            <div className="text-left">
+              <p className="text-sm font-medium text-gray-800">Guest</p>
+              <p className="text-xs text-gray-400 mt-0.5">Guest access</p>
+            </div>
+            <span className="text-xs text-emerald-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+              Autofill <ArrowRight className="w-3 h-3" />
+            </span>
+          </button>
         </div>
       </div>
     </div>

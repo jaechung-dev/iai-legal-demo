@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, test, expect, beforeEach, vi } from 'vitest'
-import RegisterPage from '@/app/register/page'
+import RegisterPage from '@/src/pages/RegisterPage'
 
 vi.mock('@/context/auth', () => ({
   useAuth: vi.fn(() => ({
@@ -11,6 +12,10 @@ vi.mock('@/context/auth', () => ({
 
 const { useAuth } = await import('@/context/auth')
 
+function renderRegister() {
+  return render(<MemoryRouter><RegisterPage /></MemoryRouter>)
+}
+
 describe('RegisterPage', () => {
   beforeEach(() => {
     vi.mocked(useAuth).mockReturnValue({
@@ -20,7 +25,7 @@ describe('RegisterPage', () => {
   })
 
   test('renders all form fields', () => {
-    render(<RegisterPage />)
+    renderRegister()
     expect(screen.getByPlaceholderText(/jane smith/i)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/min. 8 characters/i)).toBeInTheDocument()
@@ -28,18 +33,18 @@ describe('RegisterPage', () => {
   })
 
   test('renders Google OAuth button', () => {
-    render(<RegisterPage />)
+    renderRegister()
     expect(screen.getByText(/continue with google/i)).toBeInTheDocument()
   })
 
   test('has link back to sign in', () => {
-    render(<RegisterPage />)
+    renderRegister()
     const link = screen.getByRole('link', { name: /sign in/i })
-    expect(link).toHaveAttribute('href', '/login/')
+    expect(link).toHaveAttribute('href', '/login')
   })
 
   test('shows error when passwords do not match', async () => {
-    render(<RegisterPage />)
+    renderRegister()
     fireEvent.change(screen.getByPlaceholderText(/jane smith/i), { target: { value: 'Test User' } })
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), { target: { value: 'test@example.com' } })
     fireEvent.change(screen.getByPlaceholderText(/min. 8 characters/i), { target: { value: 'password123' } })
@@ -51,7 +56,7 @@ describe('RegisterPage', () => {
   })
 
   test('shows error when password is too short', async () => {
-    render(<RegisterPage />)
+    renderRegister()
     fireEvent.change(screen.getByPlaceholderText(/jane smith/i), { target: { value: 'Test User' } })
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), { target: { value: 'test@example.com' } })
     fireEvent.change(screen.getByPlaceholderText(/min. 8 characters/i), { target: { value: 'short' } })
@@ -63,7 +68,7 @@ describe('RegisterPage', () => {
   })
 
   test('shows weak password indicator for short passwords', async () => {
-    render(<RegisterPage />)
+    renderRegister()
     fireEvent.change(screen.getByPlaceholderText(/min. 8 characters/i), { target: { value: 'abc' } })
     await waitFor(() =>
       expect(screen.getByText(/weak password/i)).toBeInTheDocument()
@@ -71,7 +76,7 @@ describe('RegisterPage', () => {
   })
 
   test('shows fair password indicator for medium passwords', async () => {
-    render(<RegisterPage />)
+    renderRegister()
     fireEvent.change(screen.getByPlaceholderText(/min. 8 characters/i), { target: { value: 'abcdefgh' } })
     await waitFor(() =>
       expect(screen.getByText(/fair password/i)).toBeInTheDocument()
@@ -81,7 +86,7 @@ describe('RegisterPage', () => {
   test('shows OTP entry screen after successful registration', async () => {
     const mockRegister = vi.fn().mockResolvedValue({ email_verified: false })
     vi.mocked(useAuth).mockReturnValue({ register: mockRegister, user: null } as any)
-    render(<RegisterPage />)
+    renderRegister()
     fireEvent.change(screen.getByPlaceholderText(/jane smith/i), { target: { value: 'Jane Smith' } })
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), { target: { value: 'jane@example.com' } })
     fireEvent.change(screen.getByPlaceholderText(/min. 8 characters/i), { target: { value: 'SecurePass99!' } })
@@ -96,7 +101,7 @@ describe('RegisterPage', () => {
   test('shows registered email in verify screen', async () => {
     const mockRegister = vi.fn().mockResolvedValue({ email_verified: false })
     vi.mocked(useAuth).mockReturnValue({ register: mockRegister, user: null } as any)
-    render(<RegisterPage />)
+    renderRegister()
     fireEvent.change(screen.getByPlaceholderText(/jane smith/i), { target: { value: 'Jane Smith' } })
     fireEvent.change(screen.getByPlaceholderText(/you@example.com/i), { target: { value: 'jane@example.com' } })
     fireEvent.change(screen.getByPlaceholderText(/min. 8 characters/i), { target: { value: 'SecurePass99!' } })

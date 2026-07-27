@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, test, expect, beforeEach, vi } from 'vitest'
-import LoginModal from '@/components/LoginModal'
+import LoginModal from '@/src/components/LoginModal'
 
 vi.mock('@/context/auth', () => ({
   useAuth: vi.fn(() => ({
@@ -12,6 +13,10 @@ vi.mock('@/context/auth', () => ({
 
 const { useAuth } = await import('@/context/auth')
 
+function renderModal(onClose = vi.fn()) {
+  return render(<MemoryRouter><LoginModal onClose={onClose} /></MemoryRouter>)
+}
+
 describe('LoginModal', () => {
   const onClose = vi.fn()
 
@@ -21,24 +26,24 @@ describe('LoginModal', () => {
   })
 
   test('renders username and password inputs', () => {
-    render(<LoginModal onClose={onClose} />)
+    renderModal(onClose)
     expect(screen.getByPlaceholderText(/username/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
   })
 
   test('renders Google OAuth button', () => {
-    render(<LoginModal onClose={onClose} />)
+    renderModal(onClose)
     expect(screen.getByText(/continue with google/i)).toBeInTheDocument()
   })
 
   test('renders demo account autofill buttons', () => {
-    render(<LoginModal onClose={onClose} />)
+    renderModal(onClose)
     expect(screen.getByRole('button', { name: /guest/i })).toBeInTheDocument()
   })
 
   test('close button calls onClose', () => {
-    render(<LoginModal onClose={onClose} />)
-    const closeBtn = screen.getByRole('button', { name: '' }) // X icon button
+    renderModal(onClose)
+    const closeBtn = screen.getByRole('button', { name: '' })
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
   })
@@ -46,7 +51,7 @@ describe('LoginModal', () => {
   test('shows error when login fails', async () => {
     const mockLogin = vi.fn().mockRejectedValue(new Error('Invalid credentials'))
     vi.mocked(useAuth).mockReturnValue({ login: mockLogin, user: null, token: null } as any)
-    render(<LoginModal onClose={onClose} />)
+    renderModal(onClose)
     fireEvent.change(screen.getByPlaceholderText(/username/i), { target: { value: 'bad@user.com' } })
     fireEvent.submit(document.querySelector('form')!)
     await waitFor(() =>
@@ -55,20 +60,20 @@ describe('LoginModal', () => {
   })
 
   test('demo autofill fills username field', () => {
-    render(<LoginModal onClose={onClose} />)
+    renderModal(onClose)
     fireEvent.click(screen.getByRole('button', { name: /guest/i }))
     expect(screen.getByPlaceholderText(/username/i)).toHaveValue('demo')
   })
 
   test('has link to forgot password', () => {
-    render(<LoginModal onClose={onClose} />)
+    renderModal(onClose)
     const link = screen.getByRole('link', { name: /forgot password/i })
-    expect(link).toHaveAttribute('href', '/forgot-password/')
+    expect(link).toHaveAttribute('href', '/forgot-password')
   })
 
   test('has link to create account', () => {
-    render(<LoginModal onClose={onClose} />)
+    renderModal(onClose)
     const link = screen.getByRole('link', { name: /create account/i })
-    expect(link).toHaveAttribute('href', '/register/')
+    expect(link).toHaveAttribute('href', '/register')
   })
 })
