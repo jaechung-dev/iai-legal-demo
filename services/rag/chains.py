@@ -5,7 +5,6 @@ Provider selection: set CHAT_MODEL in .env.
   gpt-4o-mini          → OpenAI  (default)
   claude-haiku-4-5     → Anthropic
 """
-import os
 import re
 import json
 import time
@@ -16,8 +15,8 @@ from typing import AsyncIterator
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_openai import ChatOpenAI
 
+from services.core.settings import settings
 from services.rag.prompts import PROMPT, PLAIN_ENGLISH_SYSTEM
 from services.rag.retrievers import (
     LegislationRetriever,
@@ -27,15 +26,24 @@ from services.rag.retrievers import (
 
 logger = logging.getLogger(__name__)
 
-CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-4o-mini")
+CHAT_MODEL = settings.CHAT_MODEL
 
-# ── LLM provider ──────────────────────────────────────────────────────────────
+# ── Lazy LLM — initialised on first use, not at import time ───────────────────
 
-if CHAT_MODEL.startswith("claude-"):
-    from langchain_anthropic import ChatAnthropic
-    llm = ChatAnthropic(model=CHAT_MODEL, temperature=0.1, max_tokens=2048)
-else:
-    llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.1, streaming=True)
+_llm = None
+
+
+def get_llm():
+    global _llm
+    if _llm is not None:
+        return _llm
+    if CHAT_MODEL.startswith("claude-"):
+        from langchain_anthropic import ChatAnthropic
+        _llm = ChatAnthropic(model=CHAT_MODEL, temperature=0.1, max_tokens=2048)
+    else:
+        from langchain_openai import ChatOpenAI
+        _llm = ChatOpenAI(model=CHAT_MODEL, temperature=0.1, streaming=True)
+    return _llm
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -76,7 +84,7 @@ async def stream_single(
     chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | PROMPT
-        | llm
+        | get_llm()
         | StrOutputParser()
     )
     full_text = ""
@@ -116,7 +124,7 @@ async def stream_both(
     """
     docs = leg_docs + cas_docs
     context = format_docs(docs)
-    chain = PROMPT | llm | StrOutputParser()
+    chain = PROMPT | get_llm() | StrOutputParser()
 
     buffer = ""
     chunks = 0
@@ -160,7 +168,7 @@ async def stream_chat(
     buffer = ""
     chunks = 0
     t0 = time.time()
-    async for chunk in llm.astream(lc_messages):
+    async for chunk in get_llm().astream(lc_messages):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
         buffer += token
         chunks += 1

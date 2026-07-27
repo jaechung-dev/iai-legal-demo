@@ -3,12 +3,9 @@ AI Lambda — search, ask, chat.
 Full LangChain + OpenAI stack. Cold start ~3s.
 Routes: /search  /ask  /chat
 """
-import os
 import json
-import time
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 import psycopg2
 from fastapi import FastAPI, Header, HTTPException
@@ -17,10 +14,12 @@ from fastapi.responses import StreamingResponse
 from jose import jwt
 from mangum import Mangum
 from pydantic import BaseModel
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 
-from services.auth.service import JWT_SECRET, JWT_ALG
+from services.core.settings import settings
+from services.core.middleware import AccessLogMiddleware
+
+JWT_SECRET = settings.JWT_SECRET
+JWT_ALG    = settings.JWT_ALG
 from services.rag.retrievers import (
     LegislationRetriever,
     CaselawRetriever,
@@ -93,7 +92,7 @@ def _write_request_log(
     output_data: dict, elapsed_ms: int,
 ) -> None:
     try:
-        conn = psycopg2.connect(DSN)
+        conn = psycopg2.connect(settings.DATABASE_URL)
         try:
             cur = conn.cursor()
             cur.execute(
@@ -121,34 +120,6 @@ async def _log_request(
 # ── App ────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Legal Intelligence — AI", version="1.0")
-
-
-class AccessLogMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        start = time.time()
-        response = await call_next(request)
-        duration_ms = round((time.time() - start) * 1000)
-        ip = (
-            request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-            or request.headers.get("x-real-ip", "")
-            or (request.client.host if request.client else "-")
-        )
-        user = "-"
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer "):
-            try:
-                payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG])
-                user = payload.get("sub", "-")
-            except Exception:
-                pass
-        print(
-            f'ACCESS {datetime.now(timezone.utc).isoformat()} '
-            f'ip={ip} method={request.method} path={request.url.path} '
-            f'status={response.status_code} ms={duration_ms} user={user}',
-            flush=True,
-        )
-        return response
-
 
 app.add_middleware(AccessLogMiddleware)
 app.add_middleware(

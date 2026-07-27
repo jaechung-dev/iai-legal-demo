@@ -45,7 +45,7 @@ from services.rag.retrievers import (
     EMBED_MODEL,
 )
 from services.rag.chains import (
-    llm,
+    get_llm,
     format_docs,
     strip_think,
     stream_single,

@@ -5,7 +5,6 @@ Each retriever is a LangChain BaseRetriever that embeds the query with
 OpenAI text-embedding-3-small, then performs a cosine-distance lookup
 against the appropriate table.
 """
-import os
 import psycopg2
 
 from langchain_core.retrievers import BaseRetriever
@@ -14,10 +13,19 @@ from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from pydantic import Field
 
-DSN         = os.getenv("DATABASE_URL", "")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-small")
+from services.core.settings import settings
 
-embedder = OpenAIEmbeddings(model=EMBED_MODEL)
+DSN         = settings.DATABASE_URL
+EMBED_MODEL = settings.EMBED_MODEL
+
+_embedder: OpenAIEmbeddings | None = None
+
+
+def get_embedder() -> OpenAIEmbeddings:
+    global _embedder
+    if _embedder is None:
+        _embedder = OpenAIEmbeddings(model=EMBED_MODEL)
+    return _embedder
 
 
 class LegislationRetriever(BaseRetriever):
@@ -29,7 +37,7 @@ class LegislationRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
-        vec = embedder.embed_query(query)
+        vec = get_embedder().embed_query(query)
         vec_str = "[" + ",".join(str(x) for x in vec) + "]"
         conn = psycopg2.connect(DSN)
         try:
@@ -70,7 +78,7 @@ class CaselawRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
-        vec = embedder.embed_query(query)
+        vec = get_embedder().embed_query(query)
         vec_str = "[" + ",".join(str(x) for x in vec) + "]"
         conn = psycopg2.connect(DSN)
         try:
@@ -107,7 +115,7 @@ class CaseChunkRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
-        vec = embedder.embed_query(query)
+        vec = get_embedder().embed_query(query)
         vec_str = "[" + ",".join(str(x) for x in vec) + "]"
         conn = psycopg2.connect(DSN)
         try:
@@ -140,7 +148,7 @@ class CaseEventRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
-        vec = embedder.embed_query(query)
+        vec = get_embedder().embed_query(query)
         vec_str = "[" + ",".join(str(x) for x in vec) + "]"
         conn = psycopg2.connect(DSN)
         try:

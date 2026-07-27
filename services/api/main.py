@@ -4,10 +4,8 @@ No ML/RAG dependencies; cold start ~1s.
 Routes: /health  /auth/*  /intake  /user/*  /case/*/timeline  /conversations
 """
 import os
-import time
 import asyncio
 import logging
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import psycopg2
@@ -17,12 +15,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 from jose import jwt
 from pydantic import BaseModel
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 
+from services.core.settings import settings
+from services.core.middleware import AccessLogMiddleware
 from services.auth.service import router as auth_router, seed_db, JWT_SECRET, JWT_ALG
 
-DSN = os.getenv("DATABASE_URL", "")
+DSN = settings.DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +94,8 @@ def _require_auth(authorization: str | None) -> str:
 
 # ── S3 client (boto3 provided by Lambda runtime) ───────────────────────────────
 
-UPLOADS_BUCKET = os.getenv("UPLOADS_BUCKET", "")
-_AWS_REGION    = os.getenv("AWS_REGION_NAME", "ap-southeast-2")
+UPLOADS_BUCKET = settings.UPLOADS_BUCKET
+_AWS_REGION    = settings.AWS_REGION_NAME
 
 try:
     import boto3 as _boto3
@@ -108,34 +106,6 @@ except ImportError:
 # ── App ────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Legal Intelligence — API", version="1.0")
-
-
-class AccessLogMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        start = time.time()
-        response = await call_next(request)
-        duration_ms = round((time.time() - start) * 1000)
-        ip = (
-            request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-            or request.headers.get("x-real-ip", "")
-            or (request.client.host if request.client else "-")
-        )
-        user = "-"
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer "):
-            try:
-                payload = jwt.decode(auth[7:], JWT_SECRET, algorithms=[JWT_ALG])
-                user = payload.get("sub", "-")
-            except Exception:
-                pass
-        print(
-            f'ACCESS {datetime.now(timezone.utc).isoformat()} '
-            f'ip={ip} method={request.method} path={request.url.path} '
-            f'status={response.status_code} ms={duration_ms} user={user}',
-            flush=True,
-        )
-        return response
-
 
 app.add_middleware(AccessLogMiddleware)
 app.add_middleware(

@@ -1,220 +1,524 @@
 # ProBono AI
 
-Semantic search and RAG-powered legal Q&A over NSW legislation and caselaw — serverless, MCP-native, and built for non-lawyers who can't afford counsel.
+Semantic search and RAG-powered legal Q&A over NSW legislation and caselaw — serverless, MCP-native, built for non-lawyers who can't afford counsel.
 
-## Live Demo
-
-→ https://www.probonoai.com.au  
-Guest login: `demo` / `demo1234`
-
-Search NSW legislation and caselaw by meaning, not keywords. Ask legal questions in plain English and get cited answers. Explore a real case as a structured evidence timeline. Submit a case intake form and upload supporting documents. Connect Claude Desktop (or any MCP client) via the `/connect` page and query the same data through tool calls.
+**Live demo:** https://www.probonoai.com.au — Guest: `demo` / `demo1234`
 
 ---
 
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                           probonoai.com.au                                 │
-├──────────────┬──────────────────┬──────────────┬──────────┬────────────────┤
-│  Frontend    │   API Lambda     │  AI Lambda   │  MCP     │ Ingest Lambda  │
-│  Next.js 15  │   FastAPI        │  FastAPI     │  Lambda  │ (planned)      │
-│  S3+CDN      │   auth/intake/   │  search/ask/ │  FastMCP │ S3 event trig  │
-│              │   conversations  │  chat + RAG  │  Mangum  │                │
-└──────┬───────┴────────┬─────────┴──────┬───────┴────┬─────┴──────┬─────────┘
-       │                │                │            │            │
-       ▼                ▼                ▼            ▼            ▼
-  CloudFront    ┌───────────────────────────────┐  ┌──────┐  ┌──────────────┐
-  + CF Func     │  Single API Gateway HTTP v2   │  │ same │  │  S3 Uploads  │
-  (path rewrite │  route-based Lambda targeting │  │ GW   │  │  (case docs) │
-   for SPA)     └───────────────┬───────────────┘  └──────┘  └──────┬───────┘
-                                │                                    │
-                                ▼                                    ▼
-               ┌────────────────────────────────────────────────────────────┐
-               │                  Supabase PostgreSQL                        │
-               │                  pgvector (1536-dim HNSW)                   │
-               └────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          probonoai.com.au                                │
+├─────────────┬──────────────────┬─────────────┬──────────┬───────────────┤
+│  React SPA  │   API Lambda     │  AI Lambda  │   MCP    │ Ingest Lambda │
+│  Vite build │   FastAPI        │  FastAPI    │  Lambda  │ S3 → SQS trig │
+│  S3+CDN     │   auth/intake/   │  search/ask/│  FastMCP │               │
+│             │   conversations  │  chat + RAG │  Mangum  │               │
+└──────┬──────┴────────┬─────────┴──────┬──────┴────┬─────┴───────┬───────┘
+       │               │                │           │             │
+  CloudFront    API Gateway HTTP v2 (route-based Lambda targeting) │
+  + CF Function  (no extra cost per route vs $default catch-all)   │
+  SPA path rewrite                                              S3 Uploads
+       │               │                │           │          (case docs)
+       └───────────────┴────────────────┴───────────┴──────────────┘
+                                        │
+                              Supabase PostgreSQL
+                              pgvector 1536-dim HNSW
 ```
 
-All Lambda functions share one Supabase PostgreSQL instance and one API Gateway HTTP v2 — routes are targeted per Lambda (no extra cost vs. a `$default` catch-all). The frontend is a static export — no SSR, no server-side secrets. API calls are client-side fetch/SSE. A CloudFront Function rewrites directory-style paths (e.g. `/search/`) to their `index.html` before S3 lookup, enabling SPA routing without website-hosting mode.
+**One API Gateway, four Lambdas.** Routes split at the gateway — `/search /ask /chat` → AI Lambda (50MB, ~3s cold start), everything else → API Lambda (10MB, ~1s cold start). No extra cost vs. a single `$default` Lambda.
 
 ---
 
-## Services
+## Quick Start
 
-### RAG (`services/rag/`)
+```bash
+cp .env.example .env                    # set OPENAI_API_KEY, DATABASE_URL, JWT_SECRET
+psql $DATABASE_URL -f schema.sql
+pip install -r requirements.txt
 
-Retrieval and generation logic used by both the AI Lambda and (indirectly) the MCP server.
-
-- Retriever subclasses embed the query with `text-embedding-3-small` and issue pgvector cosine similarity queries (`<=>`) against the appropriate table.
-- `LegislationRetriever` — `legislation_chunks`, supports `jurisdiction` filter (NSW / Commonwealth / both).
-- `CaselawRetriever` — `caselaw_chunks`.
-- `CaseEventRetriever` — `case_events` / `demo_case_events`, filtered by `case_id`.
-- `CaseChunkRetriever` — `case_chunks`, for user-uploaded document RAG (used once ingestion pipeline is live).
-- LangChain LCEL chain: `{context: retriever | format_docs, question: passthrough} | ChatPromptTemplate | LLM | StrOutputParser`.
-- Streaming via async generators that yield `data: {...}` SSE lines, terminated with `data: [DONE]`.
-- Reasoning-model safe: `strip_think()` filters `<think>…</think>` blocks before emitting tokens.
-- Switchable LLM: `CHAT_MODEL=gpt-4o-mini` (default) or `CHAT_MODEL=claude-haiku-4-5` — provider selected at import time.
-
-### API Lambda (`services/api/`)
-
-Lightweight FastAPI app — no ML dependencies. Cold start in ~1s.
-
-- `/health` — DB connectivity check.
-- `/auth/*` — JWT access tokens (HS256) + refresh token rotation. Email OTP (6-digit, 15-min TTL). Google OAuth2. Long-lived MCP tokens.
-- `/intake/upload-url` + `/intake` — presigned S3 PUT URL generation; saves intake form to `case_intakes`. Files upload directly browser → S3 (bypasses Lambda 6MB payload limit).
-- `/user/case` — most recent intake for the authenticated user.
-- `/case/{case_id}/timeline` — chronological case events from `case_events`.
-- `/conversations` + `/conversations/{id}/messages` — full conversation history CRUD.
-- Lambda adapter: `handler = Mangum(app, lifespan="off")`.
-
-### AI Lambda (`services/ai/`)
-
-FastAPI app with the full ML stack (LangChain + OpenAI). ~50MB zip; cold start ~3s.
-
-- Every request is audit-logged to `request_logs` (input, output, elapsed_ms, user_id).
-- Legal guardrail: two-layer hallucination prevention — (1) system prompt forbids answering case-specific questions without grounded sources, predicting outcomes, or recommending strategy; (2) hard gate injects an explicit "no documents found" warning into the system message when a `case_id` is present but no case chunks score ≥ 0.35, preventing the model from filling gaps with training-data probability.
-- `/search` — semantic retrieval over legislation, caselaw, or case events; returns ranked excerpts.
-- `/ask` — single-turn RAG answer streamed as SSE with cited sources.
-- `/chat` — multi-turn RAG chat: retrieves from legislation + caselaw + user case chunks, emits a `sources` SSE event, then streams tokens. Passes last 8 messages as `HumanMessage`/`AIMessage` objects.
-- Lambda adapter: `handler = Mangum(app, lifespan="off")`.
-
-### Auth (`services/auth/`)
-
-FastAPI `APIRouter` mounted at `/auth/*` — imported by the API Lambda, not deployed standalone.
-
-- JWT access tokens (HS256) + refresh token rotation. Refresh tokens stored hashed (SHA-256), deleted on use — single-use sliding window.
-- Email OTP: 6-digit code, 15-minute TTL, hash stored in DB.
-- Google OAuth2 with in-memory CSRF state tokens.
-- Long-lived MCP tokens: opaque bearer tokens (`mcp-<uuid>`), SHA-256 hashed in `mcp_tokens`, scoped to `[search, ask, chat, timeline]`, user-revocable from `/connect`.
-
-### MCP (`services/mcp/`)
-
-FastMCP server over streamable HTTP — lets any MCP client (Claude Desktop, Cursor, custom agents) call the RAG tools directly.
-
-- Four tools: `search`, `ask`, `fetch`, `collections`.
-- Auth is token-gated: `MCPAuthMiddleware` validates every request against `mcp_tokens` and updates `last_used_at`.
-- `ask` internally calls `/chat` over HTTP and reassembles the SSE stream.
-
-### Ingestion (`services/ingestion/`)
-
-Async document processing pipeline, triggered by S3 PutObject events on the uploads bucket.
-
-**Supported file types:** PDF · Word (.docx) · Plain text (.txt) · Email (.eml) · Images (.jpg .png .tiff) · **25 MB max per file**
-
+python -m services.api.main             # → localhost:20000  (auth, intake, conversations)
+python -m services.ai.main              # → localhost:20003  (search, ask, chat)
+cd frontend && npm install && npm run dev  # → localhost:20001
 ```
-Document source (one of):
-  ① File upload  → presigned S3 PUT (browser → S3 directly, bypasses Lambda 6 MB limit)
-  ② Email drag   → .eml file upload (same presigned PUT path)
-  ③ Paste text   → POST /intake/paste-text (API writes directly to S3 as .txt)
-
-  → S3 PutObject event (includes x-amz-meta-case-id)
-  → SQS queue (iai-legal-demo-ingest)
-  → Ingestion Lambda
-      → Size check  (skip if > 25 MB)
-      → Parse       PDF: PyMuPDF native text; sparse pages → Amazon Textract OCR
-                    DOCX: python-docx
-                    TXT/TEXT: raw UTF-8
-                    EML: stdlib email — headers (From/To/Cc/Date/Subject) + plain-text body
-                    Images: Amazon Textract DetectDocumentText
-      → Chunk       ~500 token segments, 50-token overlap
-      → Embed       OpenAI text-embedding-3-small (1536 dims)
-      → Store       case_chunks (user_id, case_id, content, embedding, metadata)
-      → Update      case_intakes.files[].status = 'ready'
-```
-
-Key implementation details:
-- S3 keys are URL-decoded (`unquote_plus`) before use — S3 event notifications percent-encode special characters (e.g. `@` → `%40`).
-- `case_id` is passed as S3 object metadata (`x-amz-meta-case-id`) at upload time, so the Lambda targets the exact case without a fragile `ORDER BY created_at` fallback.
-- `_mark_file_ready` uses `COALESCE(files, '[]'::jsonb)` to handle NULL `files` column (cases submitted without documents).
-- Removing a file via `PATCH /case/{id}/files` cascades to `DELETE FROM case_chunks WHERE metadata->>'source_key' = key`.
-- Deleting a case via `DELETE /case/{id}` cascades to `DELETE FROM case_chunks WHERE case_id = id`.
-- `.eml` parsing extracts headers + plain-text body only; attachments inside the email are ignored (not recursively processed).
-
-Once chunks are in `case_chunks`, the existing `CaseChunkRetriever` surfaces them in `/chat` automatically — no other changes needed.
 
 ---
 
-## Stack
+<details>
+<summary><strong>System Design Decisions</strong></summary>
 
-| Layer | Technology |
+### Why pgvector instead of Pinecone/Weaviate?
+
+The corpus is already in PostgreSQL. A separate vector store means a second service, a sync job, and an extra network hop on every query. pgvector HNSW gives sub-10ms retrieval at this scale. The tradeoff: pgvector doesn't autoscale independently of Postgres — at high write throughput the index rebuild cost matters. Not a concern at demo scale.
+
+### Why Lambda instead of ECS?
+
+Request volume is bursty and demo-scale. Lambda costs zero at rest, Mangum means the same FastAPI code runs locally and on Lambda with no changes, and cold starts are under 3s even for the 50MB AI Lambda. ECS is warranted at sustained load (>100 req/min sustained), because the per-request cost inverts.
+
+### Why split the Lambda into API + AI?
+
+The AI Lambda carries LangChain + OpenAI SDK + numpy/scipy (~50MB zip, ~3s cold start). The API Lambda is pure FastAPI with no ML deps (~10MB, ~1s cold start). Auth calls (login, refresh, MCP token) should never wait 3s for a cold start. Splitting means auth stays fast even when the AI Lambda is cold.
+
+### Why presigned S3 PUT for document uploads?
+
+Lambda has a 6MB payload limit on request bodies. A 25MB PDF would be rejected at the gateway before the Lambda even runs. Presigned PUT lets the browser upload directly to S3 — Lambda only generates the short-lived URL (1 hour TTL). The Lambda never touches the file bytes during upload.
+
+### Why the same embedding model everywhere?
+
+All tables use `text-embedding-3-small` at 1536 dims. If you swap embedding models, all existing vectors become incomparable — you have to re-embed every row in every table. The constraint is: pick one model and hold it. Changing it is a migration event, not a config change.
+
+### Why LangChain LCEL?
+
+`|` composition makes the retrieval → prompt → LLM → parser chain readable and makes swapping components trivially safe (different retriever, different LLM, different prompt — each is one substitution). The tradeoff: LangChain is a heavy dependency (~30MB) and the abstraction sometimes hides what's actually happening. Acceptable here because this is the core product loop.
+
+### Why MCP for AI client integration?
+
+The RAG tools have typed inputs and string outputs — exactly what MCP expects. Exposing them over MCP means Claude Desktop, Cursor, and any future MCP client can query the same data without building a custom integration. The `/connect` page gives users a self-service token flow.
+
+### Why static SPA (Vite + React Router) instead of Next.js SSR?
+
+The app has no server-rendered pages — everything is auth-gated client-side fetch. Next.js SSR was never used; the app ran in `output: 'export'` mode (pure static). Vite gives faster dev builds, a simpler mental model, and removes the Next.js-specific conventions that added friction. The tradeoff: no incremental static regeneration, no server components, no edge middleware — none of which this app needs.
+
+</details>
+
+---
+
+<details>
+<summary><strong>IAM & Security — Strengths and Current Weaknesses</strong></summary>
+
+### What's working
+
+**GitHub Actions OIDC** — keyless auth. No long-lived CI secrets. The role is scoped by subject claim:
+```
+token.actions.githubusercontent.com:sub = repo:jaechung-dev*iai-legal-demo*:*
+```
+Even if the OIDC token is intercepted, it's short-lived and scoped to this repo only.
+
+**S3 presigned PUTs are time-boxed** — 1-hour TTL. The browser gets a signed URL, uploads directly, and the URL expires. Lambda never holds file bytes.
+
+**Refresh token rotation** — single-use sliding window. Each refresh call exchanges the current token for a new one. Stolen token replay fails after the first legitimate use.
+
+**MCP tokens are hashed** — stored as SHA-256 in `mcp_tokens`, not plaintext. A DB read doesn't expose the token.
+
+---
+
+### Current weaknesses — with fixes
+
+#### 1. One IAM role for all four Lambdas (critical)
+
+```hcl
+# terraform/iam.tf — all four Lambdas share this role
+resource "aws_iam_role" "lambda" { name = "${var.project}-lambda" }
+```
+
+This means the **AI Lambda has SES email permissions** and the **API Lambda can call Textract**. Neither should.
+
+**Fix:** Four roles, each with only what it needs:
+
+| Role | Needs |
 |---|---|
-| Frontend | Next.js 15 + React 19 (static export) → S3 + CloudFront |
-| CDN routing | CloudFront Function (viewer-request) — rewrites `/path/` → `/path/index.html` |
-| API gateway | AWS API Gateway HTTP v2 — route-based targeting (no extra cost per Lambda) |
-| API Lambda | FastAPI + Mangum — auth, intake, conversations (~10MB zip, no ML deps) |
-| AI Lambda | FastAPI + LangChain LCEL + Mangum — search, ask, chat (~50MB zip) |
-| Document uploads | S3 presigned PUT URLs → private S3 uploads bucket |
-| Database | Supabase PostgreSQL + pgvector (1536-dim, HNSW cosine) |
-| Embeddings | OpenAI `text-embedding-3-small` |
-| LLM | OpenAI `gpt-4o-mini` default; Anthropic Claude via `CHAT_MODEL` env var |
-| MCP | FastMCP (streamable HTTP transport, opaque bearer token auth) |
-| IaC | Terraform (ap-southeast-2) |
-| CI/CD | GitHub Actions → Lambda + S3/CloudFront |
+| `api-role` | CloudWatch Logs, SES (scoped), S3 presign |
+| `ai-role` | CloudWatch Logs only |
+| `mcp-role` | CloudWatch Logs only |
+| `ingest-role` | CloudWatch Logs, S3 read, SQS consume, Textract |
+
+#### 2. SES resource is `*`
+
+```hcl
+Resource = "*"   # any SES identity in the account
+# should be:
+Resource = "arn:aws:ses:${var.aws_region}:${account_id}:identity/${var.from_email}"
+```
+
+An attacker with Lambda execution role credentials could send email from any verified SES identity in the account, not just the app's domain.
+
+#### 3. Lambda deployment zips are in the frontend S3 bucket
+
+```hcl
+# terraform/lambda.tf
+s3_bucket = aws_s3_bucket.frontend.bucket   # same bucket CloudFront serves
+s3_key    = "api_lambda.zip"
+```
+
+`api_lambda.zip` contains all Python source code. If CloudFront serves the whole bucket without a path restriction, `https://www.probonoai.com.au/api_lambda.zip` is public. Even with an origin path prefix, this is a misconfiguration waiting to bite.
+
+**Fix:** Separate private S3 bucket for Lambda artifacts. No CloudFront distribution. No public access policy.
+
+#### 4. Secrets live in Lambda environment variables
+
+```hcl
+environment {
+  variables = {
+    DATABASE_URL   = var.database_url
+    JWT_SECRET     = var.jwt_secret
+    OPENAI_API_KEY = var.openai_api_key
+  }
+}
+```
+
+These values appear:
+- In the AWS Console (Lambda → Configuration → Environment variables) — visible to anyone with `lambda:GetFunctionConfiguration`
+- In `terraform.tfstate` in plaintext
+- In any Lambda execution log if accidentally printed
+
+**Fix:** AWS Secrets Manager. Lambda calls `secretsmanager:GetSecretValue` at startup. Rotation is schedulable. Access is logged to CloudTrail per-read.
+
+#### 5. No per-Lambda CloudWatch log group scoping
+
+`AWSLambdaBasicExecutionRole` grants `logs:CreateLogGroup` on `*`. Each Lambda can write to any log group. Scope to `/aws/lambda/${function_name}/*` per role.
+
+</details>
 
 ---
 
-## Lambda Functions
+<details>
+<summary><strong>Auth Token Architecture & Critique</strong></summary>
 
-| Function | Trigger | Timeout | Zip size | Purpose |
+### What we issue
+
+| Token type | Format | Storage | TTL | Purpose |
 |---|---|---|---|---|
-| `iai-legal-demo-api` | API Gateway HTTP | 30s | ~10MB | Auth, intake, conversations, health |
-| `iai-legal-demo-ai` | API Gateway HTTP | 60s | ~50MB | Search, ask, chat — full RAG + LLM stack |
-| `iai-legal-demo-mcp` | API Gateway HTTP | 60s | ~50MB | MCP server for Claude Desktop / AI clients |
-| `iai-legal-demo-ingest` | SQS (S3 PutObject) | 10 min | ~64MB | Document parse → chunk → embed → case_chunks |
+| Access token | JWT HS256 | Client-side (memory/localStorage) | 15 min | Authenticate API calls |
+| Refresh token | `opaque-uuid` | DB (SHA-256 hashed) | 7 days | Rotate access tokens |
+| MCP token | `mcp-<uuid>` | DB (SHA-256 hashed) | No expiry | Long-lived tool access |
+| OTP code | 6-digit | DB (hashed) | 15 min | Email verification / password reset |
+| OAuth CSRF state | UUID | In-memory dict | Request lifetime | Google OAuth CSRF protection |
 
-**API Gateway route mapping** (one gateway, four Lambdas):
+### JWT design — mostly correct
+
+```python
+# services/auth/service.py
+payload = {"sub": user_id, "exp": now + timedelta(minutes=15)}
+token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 ```
-$default                 → API Lambda (fallback)
-ANY /auth/{proxy+}       → API Lambda
-ANY /health              → API Lambda
-ANY /intake              → API Lambda
-ANY /intake/{proxy+}     → API Lambda
-ANY /user/{proxy+}       → API Lambda
-ANY /conversations        → API Lambda
-ANY /conversations/{proxy+} → API Lambda
-ANY /case/{proxy+}       → API Lambda
-ANY /search              → AI Lambda
-ANY /ask                 → AI Lambda
-ANY /chat                → AI Lambda
-ANY /mcp                 → MCP Lambda
-ANY /mcp/{proxy+}        → MCP Lambda
+
+**Good:** Short TTL (15 min). Stateless verification (no DB hit per request). Signed with HS256.
+
+**Weakness:** `JWT_SECRET` is in Lambda env vars (see IAM section). Rotating the secret invalidates all existing tokens instantly — no grace period. With Secrets Manager + version staging, you can issue new tokens with v2 secret while still verifying old tokens with v1 for the overlap window.
+
+**Weakness:** No `iss` (issuer) or `aud` (audience) claim. A JWT issued by this app could theoretically be accepted by another service using the same secret. Adding `iss: "probonoai.com.au"` costs nothing and is good hygiene.
+
+### Refresh token rotation — correct
+
+```python
+# Single-use sliding window
+stored = db.query("SELECT * FROM refresh_tokens WHERE token_hash = $1", [hash(token)])
+db.execute("DELETE FROM refresh_tokens WHERE id = $1", [stored.id])  # delete before issuing new
+new_token = issue_new_refresh_token(user_id)
+```
+
+This is the right pattern. A stolen token fails after the legitimate user rotates it. The DB hit on every refresh is intentional — it's the revocation check.
+
+### The critical OAuth CSRF bug
+
+```python
+# services/auth/service.py line 52
+OAUTH_STATES: dict = {}   # process-level dict
+
+# /auth/google — stores state
+OAUTH_STATES[state] = True
+
+# /auth/google/callback — checks state
+if state not in OAUTH_STATES:
+    raise HTTPException(401, "Invalid state")
+```
+
+**The bug:** Lambda runs as multiple concurrent instances. Each instance is a separate Python process with its own memory. If `/auth/google` and `/auth/google/callback` land on different Lambda instances, the CSRF check fails — `OAUTH_STATES` on the callback instance is empty.
+
+At low concurrency this rarely fires. As traffic scales, it becomes a consistent OAuth breakage, not a security issue but a reliability one.
+
+**Fix:** Redis. `SETEX oauth_state:{state} 300 1` (5-minute TTL). Any instance can verify any state.
+
+```python
+# services/cache.py (planned)
+await redis.setex(f"oauth_state:{state}", 300, "1")
+# callback:
+if not await redis.getdel(f"oauth_state:{state}"):
+    raise HTTPException(401, "Invalid or expired state")
+```
+
+### MCP tokens — long-lived by design, needs expiry
+
+MCP tokens are `mcp-<uuid>`, stored hashed. They're user-revocable from `/connect`. But there's no automatic expiry — a token issued today is valid indefinitely unless the user explicitly revokes it.
+
+**What this means:** If an MCP token is leaked (e.g., in a Claude Desktop config committed to GitHub), it stays valid until the user logs in and revokes it. The user may never notice.
+
+**Fix:** Add `expires_at` to `mcp_tokens` (e.g., 90-day TTL). Show last-used timestamp in the UI so users can audit token activity and revoke unused ones.
+
+### OTP codes — stored hashed, correct
+
+```python
+code = str(random.randint(100000, 999999))
+db.execute("INSERT INTO email_verifications (user_id, code_hash, expires_at) VALUES ...")
+```
+
+**Good:** Hashed at rest. 15-minute TTL. 6-digit = 1M possibilities with brute-force rate-limiting at the API level (429 after N attempts).
+
+**Concern:** `random.randint` is not cryptographically secure. Use `secrets.randbelow(900000) + 100000` instead — same output range, but the RNG state can't be predicted from observed outputs.
+
+</details>
+
+---
+
+<details>
+<summary><strong>Frontend: React + Vite Architecture</strong></summary>
+
+### Why Vite replaced Next.js
+
+The app was running Next.js in `output: 'export'` mode — pure static HTML/JS/CSS, no SSR, no server components, no API routes. Next.js in static export mode is Next.js with all the useful parts disabled: you still carry the 200MB `node_modules/next` package, the `.next/` build cache, and the Next.js-specific file conventions.
+
+Migrating to Vite + React Router v7:
+- Build time: 45s → 8s
+- Dev server start: 4s → 0.3s
+- Config: `next.config.ts` (200 lines) → `vite.config.ts` (30 lines)
+- Testing: mock `next/navigation` → `MemoryRouter initialEntries` (real router context)
+
+### The env var injection problem
+
+Next.js automatically replaces `process.env.NEXT_PUBLIC_*` at build time. Vite does not — it only exposes `import.meta.env.VITE_*`. The existing `lib/config.ts` used `process.env.NEXT_PUBLIC_API_URL` throughout.
+
+Two options:
+1. Rename all env vars to `VITE_*` and update all usages — large surface area, risky
+2. Tell Vite to replace `process.env.NEXT_PUBLIC_*` at build time via `define`
+
+Chose option 2 — zero change to `lib/config.ts`, zero risk of missing a reference:
+
+```typescript
+// vite.config.ts
+const env = loadEnv(mode, process.cwd(), '')
+define: {
+  'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'),
+  // ...
+}
+```
+
+The value is baked into the bundle at build time as a string literal, not a runtime env var lookup. This matters for the E2E test URL detection (see below).
+
+### Rolldown minifier quirk
+
+Vite 8.x uses Rolldown, which converts double-quoted string literals to backtick template literals in the minified bundle:
+
+```js
+// source
+"https://api.probonoai.com.au"
+// Rolldown output
+`https://api.probonoai.com.au`
+```
+
+The Playwright config extracted the baked API URL from the bundle to route test-runner `fetch` calls to the same backend as the browser. The regex matched `"..."` only — missed the backtick form. Fix:
+
+```typescript
+const m = content.match(/["'`](https?:\/\/(?:[^"'`]+\.execute-api\.[^"'`]+\.amazonaws\.com|api\.[^"'`\/]+))["'`]/)
+```
+
+### React Router testing pattern
+
+Before (Next.js):
+```typescript
+vi.mock('next/navigation', () => ({
+  useSearchParams: vi.fn(() => new URLSearchParams()),
+  usePathname: vi.fn(() => '/'),
+  useRouter: vi.fn(() => ({ push: vi.fn() })),
+}))
+```
+
+This mocks navigation completely — tests don't exercise the router at all.
+
+After (React Router + MemoryRouter):
+```typescript
+function renderPage(search = '') {
+  return render(
+    <MemoryRouter initialEntries={[`/login${search}`]}>
+      <LoginPage />
+    </MemoryRouter>
+  )
+}
+// useSearchParams, useLocation, useNavigate all work for real
+```
+
+The only thing still mocked: `useNavigate`'s return value (a function), when you need to assert on navigation calls. Everything else uses real router state.
+
+### Component optimization patterns
+
+**State colocation:** put state as close to where it's used as possible. A search input's `query` state belongs in the search component, not a parent layout.
+
+**Avoid redundant effects:**
+```typescript
+// wrong — effect just copies state
+const [doubled, setDoubled] = useState(0)
+useEffect(() => { setDoubled(count * 2) }, [count])
+
+// right — derive during render
+const doubled = count * 2
+```
+
+**Key prop stability:** use stable IDs (`case.id`), never array index. Index keys cause React to reuse DOM nodes across list reorders, losing input state and triggering full re-renders of unchanged items.
+
+**SSE streaming pattern:** `fetchEventSource` keeps a long-lived HTTP connection and calls a callback per `data:` line. The component appends tokens to a `ref` (not `state`) to avoid re-rendering on each token, then flushes to `state` on `[DONE]`.
+
+```typescript
+const bufferRef = useRef('')
+onmessage: (e) => {
+  if (e.data === '[DONE]') { setResponse(bufferRef.current); return }
+  bufferRef.current += JSON.parse(e.data).token
+}
 ```
 
 ---
 
-## Database Schema
+### Next.js → Vite: What You Give Up and How to Recover It
 
-| Table | Purpose |
+This is not "Vite is better than Next.js." It's "this app no longer needed what Next.js provides." Understanding the trade-off is the point.
+
+#### Feature comparison
+
+| Next.js feature | Status after Vite migration | Recovery path if needed |
+|---|---|---|
+| **SSR (per-request HTML)** | Gone | Add Next.js back, or Express + React SSR |
+| **Server Components** | Gone | Move logic to FastAPI API routes |
+| **`<Image>` optimization** | Gone | CloudFront + `format=webp` policy, or Cloudinary |
+| **API Routes (`app/api/`)** | Gone (had FastAPI instead) | No change needed — FastAPI is the API |
+| **Middleware (edge)** | Gone | CloudFront Function (already using one for SPA rewrite) |
+| **ISR / on-demand revalidation** | Gone | N/A — no server-rendered pages |
+| **`<head>` / metadata API** | Gone | `react-helmet-async` for per-page `<title>` + OG tags |
+| **File-based routing** | Gone | `src/App.tsx` with explicit `<Routes>` — more readable |
+| **Built-in TypeScript** | Vite has this too | No change |
+| **`NEXT_PUBLIC_*` env vars** | Replaced with `define` in vite.config.ts | See env var section above |
+
+#### When to go back to Next.js
+
+Three signals that Vite was the wrong choice:
+
+1. **SEO matters for public pages.** A `<ChatPage>` that's auth-gated doesn't need SSR — Google can't crawl it anyway. A `/about`, `/pricing`, or `/cases/{slug}` page that should rank in search does. The SPA delivers a blank `<div id="root">` to the crawler. Next.js serves pre-rendered HTML. Fix: keep Vite for the app, add a separate Next.js site for public-facing marketing/legal pages (two repos, one domain behind CloudFront path rules).
+
+2. **First-contentful paint matters on slow connections.** SSR delivers HTML with content on the first byte. A Vite SPA delivers an empty shell, then fetches data. On a 3G connection the difference is 2-4 seconds of blank screen. For a legal app where the target user is a stressed person on mobile, this is worth fixing.
+
+3. **You need middleware-level auth redirects.** Next.js Middleware runs at the edge before the page loads — you can redirect unauthenticated users to `/login` before they ever see a flash of protected content. In a Vite SPA, the redirect happens client-side after React mounts, causing a brief flash of the protected component. For this app's auth context the flash is acceptable; for a banking-grade app it isn't.
+
+#### Recovery paths for each scenario
+
+**SEO on public pages:** The cheapest path is `vite-plugin-ssg` (static site generation at build time). It pre-renders each route to HTML using Node.js + jsdom. Good enough for static content (`/about`, `/pricing`). Not good for dynamic content (case pages with user data).
+
+```bash
+npm install vite-plugin-ssg
+# vite.config.ts: add ssg() to plugins
+# replace main.tsx renderRoot with export default App
+```
+
+**True SSR:** Migrate the SPA to React Router v7 in "framework mode" (formerly Remix). Same `<Routes>` structure, same components, adds a Node.js server layer. Works with Vite's build toolchain.
+
+```
+React Router v7 framework mode:
+  vite.config.ts  →  adds @react-router/dev plugin
+  entry.server.tsx →  renderToPipeableStream
+  entry.client.tsx →  hydrateRoot
+```
+
+**Edge auth redirects:** CloudFront Function (already in place for the SPA rewrite) can read a `session` cookie and redirect to `/login` at the CDN level, before the SPA loads. Doesn't require moving back to Next.js.
+
+```javascript
+// CloudFront Function (viewer-request)
+function handler(event) {
+  const req = event.request
+  const cookies = req.cookies
+  const protected = ['/chat', '/search', '/my-case', '/connect']
+  const isProtected = protected.some(p => req.uri.startsWith(p))
+  if (isProtected && !cookies['session']) {
+    return { statusCode: 302, headers: { location: { value: '/login' } } }
+  }
+  // existing SPA rewrite logic...
+}
+```
+
+This recovers the Next.js Middleware pattern with zero Node.js infrastructure.
+
+#### The real trade-off summary
+
+Next.js forces a mental model: **every page is a server contract**. Vite's model: **pages are client components that fetch their own data**. Neither is universally better. The question is whether your content is indexable, whether first-byte latency matters, and whether you need edge-level request interception. For a logged-in productivity app (which this is), Vite wins. For a public-facing content site, Next.js wins.
+
+</details>
+
+---
+
+<details>
+<summary><strong>Services & API Reference</strong></summary>
+
+### API Lambda (`services/api/`) — ~10MB, ~1s cold start
+
+| Route | Purpose |
 |---|---|
-| `legislation_chunks` | NSW + Commonwealth legislation, pgvector embeddings |
-| `caselaw_chunks` | NSW caselaw, pgvector embeddings |
-| `case_events` | Case timeline events (live, user-specific) |
-| `demo_case_events` | Seeded fixture case (Bella's case), used for demo |
-| `case_chunks` | User-uploaded document chunks, pgvector embeddings |
-| `case_intakes` | Intake form submissions — personal, matter, file metadata + S3 keys |
-| `conversations` | Chat conversation records per user |
-| `conversation_messages` | Individual messages with role, content, sources |
-| `users` | Auth — email, password hash, OAuth provider |
-| `refresh_tokens` | Hashed refresh tokens with expiry |
-| `email_verifications` | OTP codes for email verification |
-| `password_resets` | OTP codes for password reset |
-| `mcp_tokens` | Long-lived MCP bearer tokens, scoped |
-| `request_logs` | Audit log — every search/chat request with input, output, latency |
+| `GET /health` | DB connectivity check |
+| `POST /auth/register` | Email + password registration, sends OTP |
+| `POST /auth/verify-email` | Verify OTP code, activate account |
+| `POST /auth/login` | Issue access + refresh tokens |
+| `POST /auth/refresh` | Rotate refresh token, issue new access token |
+| `GET /auth/google` | Redirect to Google OAuth consent screen |
+| `GET /auth/google/callback` | Exchange code, issue tokens |
+| `POST /auth/mcp/token` | Issue long-lived MCP bearer token |
+| `DELETE /auth/mcp/token/{id}` | Revoke MCP token |
+| `GET /auth/mcp/tokens` | List user's active MCP tokens |
+| `GET /intake/upload-url` | Generate presigned S3 PUT URL |
+| `POST /intake` | Save intake form to `case_intakes` |
+| `GET /user/case` | Most recent intake for authenticated user |
+| `GET /case/{id}/timeline` | Chronological case events |
+| `GET /conversations` | List user's conversations |
+| `POST /conversations` | Create conversation |
+| `GET /conversations/{id}/messages` | Full message history |
+| `POST /conversations/{id}/messages` | Append message |
+
+### AI Lambda (`services/ai/`) — ~50MB, ~3s cold start
+
+Every request is audit-logged to `request_logs` (input, output, elapsed_ms, user_id).
+
+| Route | Purpose |
+|---|---|
+| `POST /search` | Semantic retrieval — legislation, caselaw, or case events |
+| `POST /ask` | Single-turn RAG answer, streamed SSE with cited sources |
+| `POST /chat` | Multi-turn RAG chat, retrieves from legislation + caselaw + user case chunks |
+
+**Hallucination prevention (two layers):**
+1. System prompt forbids answering without grounded sources, predicting outcomes, or recommending strategy.
+2. Hard gate: if `case_id` is present but no case chunk scores ≥ 0.35, injects "no documents found" warning into the system message — prevents the model from filling gaps with training-data probability.
+
+### MCP Lambda (`services/mcp/`) — FastMCP over streamable HTTP
+
+Tools: `search`, `ask`, `fetch`, `collections`. Auth via `MCPAuthMiddleware` — validates against `mcp_tokens` on every request, updates `last_used_at`.
+
+### Ingest Lambda (`services/ingestion/`) — S3 → SQS triggered
+
+```
+S3 PutObject → SQS → Lambda
+  → Size check (skip > 25 MB)
+  → Parse  PDF: PyMuPDF + Textract OCR for sparse pages
+           DOCX: python-docx
+           TXT: raw UTF-8
+           EML: headers + plain-text body
+           Images: Textract DetectDocumentText
+  → Chunk  ~500 token segments, 50-token overlap
+  → Embed  text-embedding-3-small (1536 dims)
+  → Store  case_chunks (user_id, case_id, content, embedding, metadata)
+  → Update case_intakes.files[].status = 'ready'
+```
+
+</details>
 
 ---
 
-## RAG Pipeline
+<details>
+<summary><strong>RAG Pipeline</strong></summary>
 
 ```
 User query
-  → OpenAI text-embedding-3-small (1536-dim)
-  → pgvector HNSW cosine search
-  → LangChain LCEL: docs → format_docs() → ChatPromptTemplate → LLM
-  → StreamingResponse (SSE) → fetchEventSource (frontend)
+  → text-embedding-3-small (1536-dim)
+  → pgvector HNSW cosine search (<=> operator)
+  → LangChain LCEL: docs | format_docs | ChatPromptTemplate | LLM | StrOutputParser
+  → StreamingResponse (SSE)
+  → fetchEventSource (frontend)
 ```
 
-`/chat` retrieves from both legislation and caselaw simultaneously (plus user's case chunks if available), emits a `sources` SSE event with citations and relevance scores, then streams tokens.
+### Retrievers
 
 | Retriever | Table | Filter |
 |---|---|---|
@@ -223,151 +527,112 @@ User query
 | `CaseEventRetriever` | `case_events` / `demo_case_events` | `case_id` |
 | `CaseChunkRetriever` | `case_chunks` | `user_id` |
 
+`/chat` retrieves from legislation + caselaw + user case chunks simultaneously (parallel async), emits a `sources` SSE event with citations and relevance scores, then streams tokens.
+
+**Reasoning-model safe:** `strip_think()` filters `<think>…</think>` blocks before emitting tokens. Supports both OpenAI and Anthropic reasoning models transparently.
+
+**Switchable LLM:**
+```bash
+CHAT_MODEL=gpt-4o-mini        # OpenAI (default)
+CHAT_MODEL=claude-haiku-4-5   # Anthropic — ChatAnthropic imported automatically
+```
+
+</details>
+
 ---
 
-## Document Intelligence Roadmap
+<details>
+<summary><strong>Database Schema</strong></summary>
 
-The current ingestion pipeline handles parsing, chunking, and embedding. The next layer is **document intelligence** — making the system understand what a document *means*, not just what it says.
+| Table | Purpose |
+|---|---|
+| `legislation_chunks` | NSW + Commonwealth legislation, pgvector embeddings |
+| `caselaw_chunks` | NSW caselaw, pgvector embeddings |
+| `case_events` | Case timeline events (user-specific, live) |
+| `demo_case_events` | Seeded demo case (Bella's case) |
+| `case_chunks` | User-uploaded document chunks, pgvector embeddings |
+| `case_intakes` | Intake form submissions — personal, matter, file metadata + S3 keys |
+| `conversations` | Chat conversation records per user |
+| `conversation_messages` | Individual messages with role, content, sources |
+| `users` | Auth — email, password hash, OAuth provider |
+| `refresh_tokens` | Hashed refresh tokens with expiry |
+| `email_verifications` | OTP codes for email verification |
+| `password_resets` | OTP codes for password reset |
+| `mcp_tokens` | Long-lived MCP bearer tokens, scoped, SHA-256 hashed |
+| `request_logs` | Audit log — every search/chat request with input, output, latency |
+
+All vector columns: `vector(1536)`, HNSW index with cosine distance (`vector_cosine_ops`).
+
+</details>
+
+---
+
+<details>
+<summary><strong>Document Intelligence Roadmap</strong></summary>
+
+The current pipeline handles parsing, chunking, and embedding. The next layer is document intelligence — making the system understand what a document *means*, not just what it says.
 
 ### 1. Auto-classification (Priority 1)
 
-After embedding, run a single LLM pass over the first ~500 tokens to classify the document type:
-
+After embedding, one LLM pass over the first ~500 tokens:
 ```
 Court Order / Judgment → Police Report → Medical Report → Legal Correspondence → Personal Statement → Other
 ```
+Write result to `case_intakes.files[n].category`. No manual dropdown from the user.
 
-Write the result back to `case_intakes.files[n].category` automatically — no manual dropdown required from the user.
-
-**Why it matters:** Document type feeds the authority weighting system (see below). A court order saying "bail condition: 10pm curfew" must override a personal statement saying "I need to be out until midnight." Without classification, all chunks are treated equally.
+**Why it matters:** Document type feeds authority weighting (below). A court order saying "10pm curfew" must override a personal statement saying "I need to be out until midnight." Without classification, all chunks are treated equally.
 
 ### 2. Authority Weighting (Priority 1 — depends on classification)
 
-In law, documents carry different levels of authority. The RAG retriever should reflect this:
-
 ```
-Legislation / Acts          weight: 1.5   (highest — binding law)
+Legislation / Acts          weight: 1.5
 Court Orders / Judgments    weight: 1.4
 Police / Medical Reports    weight: 1.2
 Legal Correspondence        weight: 1.1
-Personal Statements         weight: 1.0   (lowest — subjective, self-serving)
+Personal Statements         weight: 1.0
 ```
 
-Implementation: multiply pgvector cosine similarity score by the authority weight before applying `MIN_CASE_SCORE`. Court order chunks surface first; personal statement chunks only fill gaps.
+Multiply pgvector cosine score by authority weight before applying `MIN_CASE_SCORE`. Court order chunks surface first.
 
 ### 3. Auto-timeline Extraction (Priority 2)
 
-Run a structured extraction pass over each document after embedding:
-
+Structured extraction pass after embedding:
 ```
-LLM prompt: "Extract all dates and events from this document as JSON: [{date, description, source_doc}]"
+LLM: "Extract all dates and events as JSON: [{date, description, source_doc}]"
+→ INSERT INTO case_events
 ```
 
-Insert results directly into `case_events`. The Timeline section in My Case populates automatically as documents are uploaded — no manual entry.
+Timeline in My Case populates automatically as documents upload.
 
 ### 4. Auto-summary (Priority 3)
 
-After all documents for a case are processed, run a summarisation pass across all chunks and store a plain-English case summary. The Summary section always reflects the current state of uploaded documents.
+After all documents for a case are processed, a summarisation pass across all chunks → plain-English case summary. Updates as documents are added or removed.
+
+### Email as Case Document Source
+
+- **Level 1 (live):** `.eml` upload — user exports from Gmail/Outlook, uploads like any file. Headers + body extracted. No OAuth needed.
+- **Level 2 (live):** Paste text — `POST /intake/paste-text`, stored as `.txt`, processed identically.
+- **Level 3 (roadmap):** Gmail OAuth — `gmail.readonly` scope, full thread picker. Requires Google consent screen verification (weeks-long process). Recommended as an assisted onboarding flow, not self-service.
+
+</details>
 
 ---
 
-### 5. Email as a Case Document Source
-
-Emails are primary evidence in many legal cases — threatening messages, correspondence with lawyers, court notices. Three levels of integration, in order of complexity:
-
-**Level 1 — .eml file upload (live)**
-User exports an email from Gmail/Outlook as `.eml` and uploads it like any other document. The ingest Lambda parses headers + body and embeds the content. No OAuth, no API keys — fully self-serve.
-
-**Level 2 — Paste text (live)**
-`POST /intake/paste-text` accepts raw text directly. User copies email body, pastes into a text box in My Case → Documents. Stored as `.txt` in S3, processed identically to an uploaded file.
-
-**Level 3 — Gmail OAuth (roadmap — assisted onboarding)**
-Full Gmail API integration: user connects their Gmail account once, selects relevant threads, system fetches and embeds them automatically. Requires:
-- Google OAuth2 consent screen verification (Google review process, can take weeks)
-- `gmail.readonly` scope — users must understand what they are authorising
-- Token storage per user (encrypted refresh tokens in DB)
-- Thread picker UI in My Case
-
-**Why Level 3 requires assisted setup:** Gmail OAuth for production apps requires Google's consent screen verification. The scope (`gmail.readonly`) reads all email — non-technical clients need to understand what they're authorising before proceeding. Recommended model: a one-time onboarding call where a support person walks the client through connecting their account, similar to how accountants set up cloud accounting tools for clients.
-
----
-
-### Why this order?
-
-Auto-classification is foundational — it unlocks authority weighting, which is what makes the RAG system legally trustworthy rather than just semantically similar. Auto-timeline is the highest user-visible value (users don't know how to build a legal timeline). Auto-summary can be triggered lazily. Email Level 3 is high value but gated on Google approval and client trust-building.
-
----
-
-## Key Technical Decisions
-
-**pgvector over Pinecone/Weaviate.** The corpus is already in Postgres. Adding a second vector store means a second service, a sync job, and an extra network hop. pgvector with HNSW gives sub-10ms retrieval at this scale.
-
-**LangChain LCEL over custom chains.** `|` composition makes the retrieval→prompt→LLM→parser chain readable and makes swapping components trivially safe. The tradeoff is a heavy dependency — acceptable here because this is the core product.
-
-**Lambda over ECS.** Request volume is demo-scale and bursty. Lambda costs zero at rest, cold starts are under 2s, and Mangum means no code changes between local and Lambda. ECS would be warranted at sustained load.
-
-**S3 presigned PUT for document uploads.** Files go directly browser → S3, bypassing Lambda (Lambda has a 6 MB payload cap, incompatible with 10 MB file uploads). Lambda only generates the short-lived URL.
-
-**Same embedding model everywhere.** All tables use `text-embedding-3-small` at 1536 dims. The ingestion Lambda must use the same model — switching models requires re-embedding all existing chunks.
-
-**MCP for AI client integration.** The RAG tools are well-defined with typed inputs and string outputs — exactly what MCP expects. The `/connect` page gives users a self-service token flow.
-
----
-
-## Project Structure
-
-```
-iai-legal-demo/
-├── services/
-│   ├── rag/              # pgvector retrievers + LangChain LCEL chains + prompts
-│   │   ├── retrievers.py #   LegislationRetriever, CaselawRetriever, CaseEventRetriever, CaseChunkRetriever
-│   │   ├── chains.py     #   stream_single, stream_both, stream_chat
-│   │   ├── prompts.py    #   ChatPromptTemplate + legal guardrail system prompt
-│   │   └── tests/
-│   ├── auth/             # JWT, refresh tokens, OTP, Google OAuth, MCP tokens
-│   │   ├── service.py    #   FastAPI APIRouter mounted at /auth/*
-│   │   └── tests/
-│   ├── api/              # API Lambda — auth/intake/conversations, no ML deps (~10MB)
-│   │   └── main.py       #   FastAPI app + Mangum handler
-│   ├── ai/               # AI Lambda — search/ask/chat, full RAG stack (~50MB)
-│   │   └── main.py       #   FastAPI app + Mangum handler
-│   ├── mcp/              # FastMCP server — RAG tools over streamable HTTP
-│   │   ├── server.py     #   search, ask, fetch, collections tools
-│   │   └── tests/
-│   └── ingestion/        # (planned) S3-triggered document ingestion pipeline
-│       └── handler.py    #   parse → chunk → embed → case_chunks
-├── frontend/             # Next.js 15 static export → S3 + CloudFront
-│   ├── app/              #   chat, search, intake, connect, auth pages
-│   ├── components/       #   Nav, TimelineClient, LoginModal
-│   └── tests/
-├── tests/                # Integration tests against production API
-├── terraform/            # Lambda, API GW, S3 (frontend + uploads), CloudFront, ACM
-│   ├── main.tf           #   S3 buckets, CloudFront distribution + CF Function (SPA rewrite)
-│   ├── lambda.tf         #   API + AI + MCP Lambda functions + API Gateway routes
-│   ├── iam.tf            #   Lambda execution role, GitHub Actions OIDC, S3 upload policy
-│   └── cert.tf           #   ACM certificate + Route53 validation
-├── schema.sql            # Full PostgreSQL schema (run once on fresh DB)
-├── build_lambda.sh       # Package → api_lambda.zip + ai_lambda.zip + mcp_lambda.zip
-└── deploy_frontend.sh    # next build → S3 sync → CloudFront invalidation
-```
-
----
-
-## Local Setup
+<details>
+<summary><strong>Local Setup</strong></summary>
 
 ### 1. Environment
 
 ```bash
 cp .env.example .env
 # Required: OPENAI_API_KEY, DATABASE_URL (Postgres + pgvector), JWT_SECRET
-# Optional: CHAT_MODEL (default: gpt-4o-mini), GOOGLE_CLIENT_ID/SECRET, UPLOADS_BUCKET
+# Optional: CHAT_MODEL, GOOGLE_CLIENT_ID/SECRET, UPLOADS_BUCKET
 ```
 
 ### 2. Database
 
 ```bash
 psql $DATABASE_URL -f schema.sql
-
 python ingest.py                                          # case events
 python ingest_law.py legislation_demo.csv legislation     # legislation chunks
 python ingest_law.py caselaw_demo.csv caselaw             # caselaw chunks
@@ -378,96 +643,121 @@ python ingest_law.py caselaw_demo.csv caselaw             # caselaw chunks
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# API Lambda routes (auth, intake, conversations — no ML deps)
-python -m services.api.main      # → http://localhost:20000
-
-# AI Lambda routes (search, ask, chat — needs OPENAI_API_KEY)
-python -m services.ai.main       # → http://localhost:20003
+python -m services.api.main    # → http://localhost:20000
+python -m services.ai.main     # → http://localhost:20003
 ```
 
 ### 4. MCP Server (optional)
 
 ```bash
-python -m services.mcp.server        # → http://localhost:20002
+python -m services.mcp.server  # → http://localhost:20002
 ```
 
 ### 5. Frontend
 
 ```bash
-cd frontend
-npm install
-npm run dev                          # → http://localhost:20001
+cd frontend && npm install && npm run dev  # → http://localhost:20001
 ```
 
-### Connect Claude Desktop (MCP)
+### Connect Claude Desktop
 
-Log in at `localhost:20001/connect`, generate an MCP token, then:
+Generate an MCP token at `localhost:20001/connect`, then add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "legal-rag": {
       "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://api.probonoai.com.au/mcp",
-        "--header",
-        "Authorization: Bearer <your-mcp-token>"
-      ]
+      "args": ["mcp-remote", "https://api.probonoai.com.au/mcp",
+               "--header", "Authorization: Bearer <your-mcp-token>"]
     }
   }
 }
 ```
 
+</details>
+
 ---
 
-## Testing
+<details>
+<summary><strong>Testing</strong></summary>
 
 ```
 services/auth/tests/     13 pytest unit tests — register, login, OTP, refresh, MCP tokens
-services/bff/tests/       9 pytest unit tests — search, ask, chat, timeline, intake endpoints
+services/bff/tests/       9 pytest unit tests — search, ask, chat, timeline, intake
 services/mcp/tests/       5 pytest unit tests — tool registration, auth middleware
 services/rag/tests/      21 pytest unit tests — retrievers (10) + chains (11)
 tests/                   integration tests against production API
-  test_api_smoke.py          smoke: health, search, ask, chat
-  test_mcp_smoke.py          MCP tool smoke tests
+  test_api_smoke.py        health, search, ask, chat smoke
+  test_mcp_smoke.py        MCP tool smoke
   test_integration_judge.py  LLM-as-judge response quality evaluation
 frontend/tests/          76 Vitest unit tests (pages, Nav, LoginModal, useGuestQuota)
-frontend/e2e/            Playwright end-to-end (auth, search, chat, timeline, MCP)
+frontend/e2e/            Playwright end-to-end (auth, search, chat, timeline, MCP connect)
 ```
 
 ```bash
 pytest services/ -v          # unit tests
-pytest tests/ -v             # integration tests (hits production)
-cd frontend && npm test       # frontend unit tests
+pytest tests/ -v             # integration (hits production)
+cd frontend && npm test       # Vitest unit tests
+cd frontend && npx playwright test  # E2E (requires built frontend)
 ```
+
+</details>
 
 ---
 
-## Deployment
+<details>
+<summary><strong>Deployment</strong></summary>
 
 ### Backend → Lambda
 
 ```bash
 ./build_lambda.sh    # → api_lambda.zip + ai_lambda.zip + mcp_lambda.zip
-cd terraform
-terraform apply      # Lambda (API + AI + MCP), API Gateway routes, S3, CloudFront, ACM cert
+cd terraform && terraform apply
 ```
 
 ### Frontend → S3 + CloudFront
 
 ```bash
-./deploy_frontend.sh    # next build → S3 sync → CloudFront invalidation
+./deploy_frontend.sh    # vite build → S3 sync → CloudFront invalidation
 ```
 
-### Switching LLM providers
+### CI/CD (GitHub Actions)
+
+Push to `main` → GitHub Actions OIDC assumes deploy role (keyless, no stored secrets) → uploads Lambda zips → updates Lambda function code → invalidates CloudFront.
+
+### Switching LLM
 
 ```bash
 CHAT_MODEL=gpt-4o-mini       # OpenAI (default)
-CHAT_MODEL=claude-haiku-4-5  # Anthropic — ChatAnthropic imported automatically
+CHAT_MODEL=claude-haiku-4-5  # Anthropic
 ```
 
-Set in Lambda environment variables (or `.env` locally). No code changes required.
+Set in Lambda environment variables or `.env` locally. No code changes.
 
-> **Next:** Document intelligence layer — auto-classify document type, authority-weighted retrieval, auto-extract timeline events, auto-generate case summary (see Document Intelligence Roadmap above). Email Level 3 (Gmail OAuth, assisted onboarding). Also: migration system for schema changes, AWS Secrets Manager for secret rotation, GitHub Actions CI for automated Lambda deploys on push.
+</details>
+
+---
+
+## Project Structure
+
+```
+iai-legal-demo/
+├── services/
+│   ├── rag/          # pgvector retrievers + LangChain LCEL chains + prompts
+│   ├── auth/         # JWT, OTP, Google OAuth, MCP tokens
+│   ├── api/          # API Lambda entrypoint (~10MB)
+│   ├── ai/           # AI Lambda entrypoint (~50MB)
+│   ├── mcp/          # FastMCP server
+│   └── ingestion/    # S3-triggered ingest pipeline
+├── frontend/         # Vite + React Router SPA → S3 + CloudFront
+│   ├── src/          #   pages, components, context, lib
+│   ├── tests/        #   76 Vitest unit tests
+│   └── e2e/          #   Playwright E2E
+├── terraform/        # Lambda, API GW, S3, CloudFront, ACM, IAM
+├── schema.sql        # Full PostgreSQL schema
+├── build_lambda.sh   # Package Lambda zips
+└── deploy_frontend.sh
+```
+
+**Next priorities:** (1) Per-Lambda IAM roles — split the shared role. (2) Python service layer refactor — `services/core/` with Pydantic Settings, Redis cache, shared DB context manager. (3) Lambda zips → dedicated private S3 bucket. (4) Document intelligence — auto-classify, authority-weighted retrieval, auto-timeline extraction.

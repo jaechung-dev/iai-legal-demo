@@ -7,12 +7,9 @@ Import and include this router in the BFF app:
     from services.auth.service import router as auth_router
     app.include_router(auth_router)
 """
-import os
 import hashlib
-import random
 import secrets
 import uuid
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
@@ -23,24 +20,25 @@ from fastapi.responses import RedirectResponse
 from jose import jwt
 from pydantic import BaseModel
 
-# ── Config ─────────────────────────────────────────────────────────────────────
+from services.core.settings import settings
+from services.core.db import get_db
+from services.core.cache import get_redis
 
-DSN        = os.getenv("DATABASE_URL", "")
-JWT_SECRET = os.getenv("JWT_SECRET", "")
-JWT_ALG    = "HS256"
+# ── Config aliases (kept for backward-compat imports) ─────────────────────────
 
-GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-FRONTEND_URL         = os.getenv("FRONTEND_URL", "http://localhost:20001")
-BACKEND_URL          = os.getenv("BACKEND_URL", "http://localhost:20000")
-APP_NAME             = os.getenv("APP_NAME", "ProBono AI")
+DSN        = settings.DATABASE_URL
+JWT_SECRET = settings.JWT_SECRET
+JWT_ALG    = settings.JWT_ALG
 
-_demo_pw  = os.getenv("DEMO_PASSWORD", "")
-_admin_pw = os.getenv("ADMIN_PASSWORD", "")
+GOOGLE_CLIENT_ID     = settings.GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET = settings.GOOGLE_CLIENT_SECRET
+FRONTEND_URL         = settings.FRONTEND_URL
+BACKEND_URL          = settings.BACKEND_URL
+APP_NAME             = settings.APP_NAME
 
 SEED_USERS = {
-    "demo":  {"password": _demo_pw,  "name": "Guest", "role": "user"},
-    "admin": {"password": _admin_pw, "name": "Admin", "role": "admin"},
+    "demo":  {"password": settings.DEMO_PASSWORD,  "name": "Guest", "role": "user"},
+    "admin": {"password": settings.ADMIN_PASSWORD, "name": "Admin", "role": "admin"},
 }
 SEED_IDS = {
     "demo":  "00000000-0000-0000-0000-000000000001",
@@ -48,8 +46,10 @@ SEED_IDS = {
 }
 SCOPES = ["search", "ask", "chat", "timeline"]
 
-# Short-lived CSRF tokens for the OAuth dance (in-memory, same request flow)
-OAUTH_STATES: dict = {}
+# Fallback in-memory CSRF store — used when Redis is unavailable.
+# Breaks under Lambda concurrency (each instance has its own copy).
+# Set REDIS_URL to fix this.
+_oauth_states: dict = {}
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
@@ -96,18 +96,7 @@ class MCPTokenRequest(BaseModel):
 
 # ── DB helpers ─────────────────────────────────────────────────────────────────
 
-
-@contextmanager
-def _db():
-    conn = psycopg2.connect(DSN)
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+_db = get_db  # alias so all existing call sites (_db() as conn) work unchanged
 
 
 def _h(s: str) -> str:
@@ -204,11 +193,10 @@ def require_auth(authorization: str | None) -> str:
 
 
 def _send_email(to: str, subject: str, html: str, text: str):
-    FROM = os.getenv("FROM_EMAIL", "noreply@probonoai.com.au")
     try:
         import boto3
-        boto3.client("ses", region_name=os.getenv("AWS_REGION", "ap-southeast-2")).send_email(
-            Source=FROM,
+        boto3.client("ses", region_name=settings.AWS_REGION_NAME).send_email(
+            Source=settings.FROM_EMAIL,
             Destination={"ToAddresses": [to]},
             Message={
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
@@ -289,7 +277,7 @@ def auth_register(req: RegisterRequest):
             (user_id, email, req.name.strip(), _hash_password(req.password, salt), salt),
         )
 
-    code = str(random.randint(100000, 999999))
+    code = str(secrets.randbelow(900000) + 100000)
     vexp = datetime.now(timezone.utc) + timedelta(minutes=15)
     with _db() as conn:
         conn.cursor().execute(
@@ -436,7 +424,7 @@ def auth_resend_verification(req: EmailRequest):
             "UPDATE email_verifications SET used=true WHERE user_id=%s AND used=false",
             (user["id"],),
         )
-    code = str(random.randint(100000, 999999))
+    code = str(secrets.randbelow(900000) + 100000)
     vexp = datetime.now(timezone.utc) + timedelta(minutes=15)
     with _db() as conn:
         conn.cursor().execute(
@@ -551,11 +539,15 @@ def revoke_mcp_token(token_id: str, authorization: str = Header(default=None)):
 
 
 @router.get("/google")
-def google_login():
+async def google_login():
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(501, "Google OAuth not configured")
     state = secrets.token_urlsafe(32)
-    OAUTH_STATES[state] = True
+    redis = await get_redis()
+    if redis:
+        await redis.setex(f"oauth_state:{state}", 300, "1")
+    else:
+        _oauth_states[state] = True
     params = urlencode({
         "client_id":     GOOGLE_CLIENT_ID,
         "redirect_uri":  f"{BACKEND_URL}/auth/google/callback",
@@ -570,8 +562,14 @@ def google_login():
 
 @router.get("/google/callback")
 async def google_callback(code: str = Query(...), state: str = Query(...)):
-    if not OAUTH_STATES.pop(state, None):
-        raise HTTPException(400, "Invalid OAuth state")
+    redis = await get_redis()
+    if redis:
+        valid = await redis.getdel(f"oauth_state:{state}")
+        if not valid:
+            raise HTTPException(400, "Invalid OAuth state")
+    else:
+        if not _oauth_states.pop(state, None):
+            raise HTTPException(400, "Invalid OAuth state")
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",

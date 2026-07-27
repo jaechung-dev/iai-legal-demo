@@ -27,22 +27,23 @@ _LLM_PATCH = patch("langchain_openai.ChatOpenAI", side_effect=_stub_chat_openai)
 
 
 class TestLLMInitialised(unittest.TestCase):
-    """The module-level `llm` should be a ChatOpenAI (or ChatAnthropic) instance."""
+    """get_llm() should return a ChatOpenAI (or ChatAnthropic) instance."""
 
     def test_llm_exists(self):
         with _EMBED_PATCH, _PSYCOPG2_PATCH, _LLM_PATCH:
             import importlib
             import services.rag.chains as _chains_mod
             importlib.reload(_chains_mod)
-            # llm is set at module level — just confirm it is not None
-            self.assertIsNotNone(_chains_mod.llm)
+            _chains_mod._llm = None  # reset lazy cache so the patch takes effect
+            self.assertIsNotNone(_chains_mod.get_llm())
 
     def test_llm_is_chat_model(self):
         with _EMBED_PATCH, _PSYCOPG2_PATCH, _LLM_PATCH:
             import importlib
             import services.rag.chains as _chains_mod
             importlib.reload(_chains_mod)
-            name = type(_chains_mod.llm).__name__
+            _chains_mod._llm = None
+            name = type(_chains_mod.get_llm()).__name__
             self.assertIn(
                 name,
                 ("ChatOpenAI", "ChatAnthropic", "MagicMock"),
