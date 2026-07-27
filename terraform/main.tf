@@ -32,6 +32,27 @@ locals {
   basic_auth_b64 = base64encode("${var.basic_auth_user}:${var.basic_auth_password}")
 }
 
+# ── S3 — Lambda deployment artifacts ─────────────────────────────────────────
+# Separate from the frontend bucket: Lambda ZIPs shouldn't be mixed with assets
+# that CloudFront serves or that GitHub Actions can overwrite on every frontend deploy.
+
+resource "aws_s3_bucket" "lambda_artifacts" {
+  bucket = "${var.project}-lambda-${random_id.suffix.hex}"
+}
+
+resource "aws_s3_bucket_public_access_block" "lambda_artifacts" {
+  bucket                  = aws_s3_bucket.lambda_artifacts.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "lambda_artifacts" {
+  bucket = aws_s3_bucket.lambda_artifacts.id
+  versioning_configuration { status = "Enabled" }
+}
+
 # ── S3 — case document uploads ────────────────────────────────────────────────
 
 resource "aws_s3_bucket" "uploads" {

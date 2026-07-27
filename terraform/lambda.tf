@@ -7,10 +7,10 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
 resource "aws_lambda_function" "api" {
   function_name    = "${var.project}-api"
-  role             = aws_iam_role.lambda.arn
+  role             = aws_iam_role.lambda_api.arn
   runtime          = "python3.12"
   handler          = "services.api.main.handler"
-  s3_bucket        = aws_s3_bucket.frontend.bucket
+  s3_bucket        = aws_s3_bucket.lambda_artifacts.bucket
   s3_key           = "api_lambda.zip"
   timeout          = 30
   memory_size      = 256
@@ -52,10 +52,10 @@ resource "aws_cloudwatch_log_group" "ai_lambda" {
 
 resource "aws_lambda_function" "ai" {
   function_name    = "${var.project}-ai"
-  role             = aws_iam_role.lambda.arn
+  role             = aws_iam_role.lambda_ai.arn
   runtime          = "python3.12"
   handler          = "services.ai.main.handler"
-  s3_bucket        = aws_s3_bucket.frontend.bucket
+  s3_bucket        = aws_s3_bucket.lambda_artifacts.bucket
   s3_key           = "ai_lambda.zip"
   timeout          = 60
   memory_size      = 512
@@ -152,10 +152,10 @@ resource "aws_cloudwatch_log_group" "mcp_lambda" {
 
 resource "aws_lambda_function" "mcp" {
   function_name    = "${var.project}-mcp"
-  role             = aws_iam_role.lambda.arn
+  role             = aws_iam_role.lambda_mcp.arn
   runtime          = "python3.12"
   handler          = "mcp_server.handler"
-  s3_bucket        = aws_s3_bucket.frontend.bucket
+  s3_bucket        = aws_s3_bucket.lambda_artifacts.bucket
   s3_key           = "mcp_lambda.zip"
   timeout          = 60
   memory_size      = 512
@@ -256,10 +256,10 @@ resource "aws_s3_bucket_notification" "uploads" {
 
 resource "aws_lambda_function" "ingest" {
   function_name    = "${var.project}-ingest"
-  role             = aws_iam_role.lambda.arn
+  role             = aws_iam_role.lambda_ingest.arn
   runtime          = "python3.12"
   handler          = "services.ingestion.handler.handler"
-  s3_bucket        = aws_s3_bucket.frontend.bucket
+  s3_bucket        = aws_s3_bucket.lambda_artifacts.bucket
   s3_key           = "ingest_lambda.zip"
   timeout          = 600  # 10 minutes — large PDFs can be slow to OCR
   memory_size      = 1024

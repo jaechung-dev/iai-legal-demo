@@ -48,12 +48,22 @@ resource "aws_iam_role_policy" "github_actions" {
         ]
       },
       {
-        Sid    = "S3"
+        Sid    = "FrontendS3"
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:ListBucket"]
         Resource = [
           "arn:aws:s3:::${aws_s3_bucket.frontend.bucket}",
           "arn:aws:s3:::${aws_s3_bucket.frontend.bucket}/*"
+        ]
+      },
+      {
+        # Write-only — Lambda service reads ZIPs internally using account-level access
+        Sid    = "LambdaArtifactsS3"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:ListBucket"]
+        Resource = [
+          "arn:aws:s3:::${aws_s3_bucket.lambda_artifacts.bucket}",
+          "arn:aws:s3:::${aws_s3_bucket.lambda_artifacts.bucket}/*"
         ]
       },
       {
@@ -70,12 +80,10 @@ output "github_actions_role_arn" {
   value = aws_iam_role.github_actions.arn
 }
 
-# ── Lambda execution role ─────────────────────────────────────────────────────
+# ── Shared assume-role trust policy ──────────────────────────────────────────
 
-resource "aws_iam_role" "lambda" {
-  name = "${var.project}-lambda"
-
-  assume_role_policy = jsonencode({
+locals {
+  lambda_trust = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Action    = "sts:AssumeRole"
@@ -85,40 +93,91 @@ resource "aws_iam_role" "lambda" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_logs" {
-  role       = aws_iam_role.lambda.name
+# ── API Lambda role ───────────────────────────────────────────────────────────
+# Permissions: CloudWatch logs, SES (OTP + password-reset emails),
+#              S3 presigned PUT URLs for client document uploads.
+
+resource "aws_iam_role" "lambda_api" {
+  name               = "${var.project}-lambda-api"
+  assume_role_policy = local.lambda_trust
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_api_logs" {
+  role       = aws_iam_role.lambda_api.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy" "lambda_ses" {
+resource "aws_iam_role_policy" "lambda_api_ses" {
   name = "ses-send"
-  role = aws_iam_role.lambda.id
+  role = aws_iam_role.lambda_api.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
       Action   = ["ses:SendEmail", "ses:SendRawEmail"]
-      Resource = "*"
+      # Scoped to the verified domain identity — not * (would allow any identity in account)
+      Resource = "arn:aws:ses:${var.aws_region}:${data.aws_caller_identity.current.account_id}:identity/probonoai.com.au"
     }]
   })
 }
 
-resource "aws_iam_role_policy" "lambda_s3_uploads" {
-  name = "s3-uploads"
-  role = aws_iam_role.lambda.id
+resource "aws_iam_role_policy" "lambda_api_s3" {
+  name = "s3-uploads-presign"
+  role = aws_iam_role.lambda_api.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
       Action   = ["s3:PutObject", "s3:GetObject"]
-      Resource = "${aws_s3_bucket.uploads.arn}/*"
+      Resource = "${aws_s3_bucket.uploads.arn}/intakes/*"
     }]
   })
 }
 
-resource "aws_iam_role_policy" "lambda_sqs_ingest" {
-  name = "sqs-ingest"
-  role = aws_iam_role.lambda.id
+# ── AI Lambda role ────────────────────────────────────────────────────────────
+# Permissions: CloudWatch logs only.
+# DB access is psycopg2 TCP; OpenAI is HTTPS — no AWS service calls at runtime.
+
+resource "aws_iam_role" "lambda_ai" {
+  name               = "${var.project}-lambda-ai"
+  assume_role_policy = local.lambda_trust
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_ai_logs" {
+  role       = aws_iam_role.lambda_ai.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# ── MCP Lambda role ───────────────────────────────────────────────────────────
+# Permissions: CloudWatch logs only. DB via psycopg2 TCP.
+
+resource "aws_iam_role" "lambda_mcp" {
+  name               = "${var.project}-lambda-mcp"
+  assume_role_policy = local.lambda_trust
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_mcp_logs" {
+  role       = aws_iam_role.lambda_mcp.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# ── Ingest Lambda role ────────────────────────────────────────────────────────
+# Permissions: CloudWatch logs, SQS (consume ingest queue),
+#              S3 GetObject (read uploaded PDFs), Textract (OCR).
+
+resource "aws_iam_role" "lambda_ingest" {
+  name               = "${var.project}-lambda-ingest"
+  assume_role_policy = local.lambda_trust
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_ingest_logs" {
+  role       = aws_iam_role.lambda_ingest.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_ingest_sqs" {
+  name = "sqs-consume"
+  role = aws_iam_role.lambda_ingest.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -137,11 +196,25 @@ resource "aws_iam_role_policy" "lambda_sqs_ingest" {
   })
 }
 
-resource "aws_iam_role_policy" "lambda_textract" {
-  name = "textract"
-  role = aws_iam_role.lambda.id
+resource "aws_iam_role_policy" "lambda_ingest_s3" {
+  name = "s3-uploads-read"
+  role = aws_iam_role.lambda_ingest.id
   policy = jsonencode({
     Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:GetObject"]
+      Resource = "${aws_s3_bucket.uploads.arn}/intakes/*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_ingest_textract" {
+  name = "textract"
+  role = aws_iam_role.lambda_ingest.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    # Textract doesn't support resource-level ARNs — * is required here.
     Statement = [{
       Effect   = "Allow"
       Action   = ["textract:DetectDocumentText", "textract:AnalyzeDocument"]
