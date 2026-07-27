@@ -1,0 +1,49 @@
+# ── Secrets Manager ───────────────────────────────────────────────────────────
+#
+# All sensitive application secrets live here. Lambda functions receive only
+# SECRET_ARN (non-sensitive) and fetch the values at cold start via boto3.
+# Sensitive vars are NOT set on Lambda function configurations.
+#
+# Rotation notes:
+#   DATABASE_URL, OPENAI_API_KEY, GOOGLE_CLIENT_SECRET:
+#     Rotate manually — update this secret via AWS console or CLI, then
+#     trigger a Lambda redeploy or wait for the next cold start.
+#
+#   JWT_SECRET:
+#     Do NOT use auto-rotation without a dual-key (JWKS kid) strategy.
+#     Safe manual procedure: update the secret → wait 1 hour (access token
+#     TTL) → all tokens signed with the old key will have expired naturally.
+#     Refresh tokens are opaque (DB-stored) and are unaffected.
+#
+#   ADMIN_PASSWORD / DEMO_PASSWORD:
+#     Seed user passwords are hashed in the DB at startup. Rotating here
+#     requires also re-seeding the DB (call /auth/reset-password or re-run
+#     seed_db with the new value).
+#
+# Terraform state warning:
+#   Secret values appear in plaintext in terraform.tfstate. Keep state local
+#   (gitignored) or migrate to S3 remote state with SSE + versioning.
+
+resource "aws_secretsmanager_secret" "app" {
+  name                    = "${var.project}/secrets"
+  description             = "Application secrets — fetched by Lambda at cold start via SECRET_ARN"
+  recovery_window_in_days = 7
+}
+
+resource "aws_secretsmanager_secret_version" "app" {
+  secret_id = aws_secretsmanager_secret.app.id
+  secret_string = jsonencode({
+    DATABASE_URL         = var.database_url
+    JWT_SECRET           = var.jwt_secret
+    OPENAI_API_KEY       = var.openai_api_key
+    GOOGLE_CLIENT_ID     = var.google_client_id
+    GOOGLE_CLIENT_SECRET = var.google_client_secret
+    ADMIN_PASSWORD       = var.admin_password
+    DEMO_PASSWORD        = var.demo_password
+  })
+}
+
+output "secret_arn" {
+  description = "Set as SECRET_ARN on Lambda functions. Content is fetched at cold start — ARN itself is not sensitive."
+  value       = aws_secretsmanager_secret.app.arn
+}

@@ -27,6 +27,10 @@ import psycopg2
 import tiktoken
 from psycopg2.extras import execute_values
 
+# Load secrets from AWS Secrets Manager before reading env vars.
+# services.core.settings._load_secrets() populates os.environ at import time.
+from services.core.settings import settings as _settings  # noqa: F401
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 

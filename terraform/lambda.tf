@@ -18,17 +18,13 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      DATABASE_URL         = var.database_url
-      JWT_SECRET           = var.jwt_secret
-      ADMIN_PASSWORD       = var.admin_password
-      DEMO_PASSWORD        = var.demo_password
-      FROM_EMAIL           = var.from_email
-      FRONTEND_URL         = var.frontend_url
-      BACKEND_URL          = var.backend_url
-      GOOGLE_CLIENT_ID     = var.google_client_id
-      GOOGLE_CLIENT_SECRET = var.google_client_secret
-      UPLOADS_BUCKET       = aws_s3_bucket.uploads.bucket
-      AWS_REGION_NAME      = var.aws_region
+      # Sensitive values are fetched from Secrets Manager at cold start via SECRET_ARN.
+      SECRET_ARN      = aws_secretsmanager_secret.app.arn
+      FROM_EMAIL      = var.from_email
+      FRONTEND_URL    = var.frontend_url
+      BACKEND_URL     = var.backend_url
+      UPLOADS_BUCKET  = aws_s3_bucket.uploads.bucket
+      AWS_REGION_NAME = var.aws_region
     }
   }
 
@@ -63,10 +59,9 @@ resource "aws_lambda_function" "ai" {
 
   environment {
     variables = {
-      DATABASE_URL   = var.database_url
-      OPENAI_API_KEY = var.openai_api_key
-      JWT_SECRET     = var.jwt_secret
-      BACKEND_URL    = var.backend_url
+      SECRET_ARN      = aws_secretsmanager_secret.app.arn
+      BACKEND_URL     = var.backend_url
+      AWS_REGION_NAME = var.aws_region
     }
   }
 
@@ -163,9 +158,9 @@ resource "aws_lambda_function" "mcp" {
 
   environment {
     variables = {
-      DATABASE_URL = var.database_url
-      JWT_SECRET   = var.jwt_secret
-      RAG_URL      = var.backend_url
+      SECRET_ARN      = aws_secretsmanager_secret.app.arn
+      RAG_URL         = var.backend_url
+      AWS_REGION_NAME = var.aws_region
     }
   }
 
@@ -267,8 +262,7 @@ resource "aws_lambda_function" "ingest" {
 
   environment {
     variables = {
-      DATABASE_URL    = var.database_url
-      OPENAI_API_KEY  = var.openai_api_key
+      SECRET_ARN      = aws_secretsmanager_secret.app.arn
       AWS_REGION_NAME = var.aws_region
     }
   }

@@ -1,16 +1,68 @@
-name: Deploy
+name: CI / CD
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+# OIDC — short-lived tokens only. No AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+# should exist as repository secrets. If they do, delete them from
+# Settings → Secrets and variables → Actions.
 permissions:
-  id-token: write
+  id-token: write   # required for OIDC token exchange
   contents: read
 
+# ── Required GitHub secrets ───────────────────────────────────────────────────
+# AWS_DEPLOY_ROLE_ARN   — terraform output github_actions_role_arn
+# FRONTEND_BUCKET       — terraform output s3_bucket
+# LAMBDA_BUCKET         — terraform output lambda_artifacts_bucket
+# CF_DIST_ID            — CloudFront distribution ID (terraform output cloudfront_url → extract ID)
+# NEXT_PUBLIC_API_URL   — https://api.probonoai.com.au
+
 jobs:
+  # ── 1. Test ─────────────────────────────────────────────────────────────────
+  test-python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest services/ -v --tb=short
+
+  test-frontend:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm test
+
+  # ── 2. Detect what changed ───────────────────────────────────────────────────
   changes:
+    name: Detect changes
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
@@ -22,17 +74,21 @@ jobs:
         with:
           filters: |
             backend:
-              - 'main.py'
-              - 'requirements.txt'
-              - 'auth.py'
+              - 'services/**'
+              - 'requirements*.txt'
+              - 'build_lambda.sh'
               - 'mcp_server.py'
             frontend:
               - 'frontend/**'
 
+  # ── 3. Deploy Lambda (CD — main branch only, tests must pass) ───────────────
   deploy-backend:
     name: Deploy Lambda
-    needs: changes
-    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [test-python, test-frontend, changes]
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' &&
+      (needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,43 +97,44 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build lambda.zip
+      - name: Build Lambda ZIPs
         run: bash build_lambda.sh
 
-      - name: Configure AWS credentials via OIDC
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-2
 
-      - name: Upload lambda.zip to S3
+      - name: Upload ZIPs to Lambda artifacts bucket
+        env:
+          LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET }}
         run: |
-          aws s3 cp lambda.zip s3://${{ secrets.S3_BUCKET }}/lambda.zip
+          aws s3 cp api_lambda.zip    s3://$LAMBDA_BUCKET/api_lambda.zip
+          aws s3 cp ai_lambda.zip     s3://$LAMBDA_BUCKET/ai_lambda.zip
+          aws s3 cp mcp_lambda.zip    s3://$LAMBDA_BUCKET/mcp_lambda.zip
+          aws s3 cp ingest_lambda.zip s3://$LAMBDA_BUCKET/ingest_lambda.zip
 
       - name: Update Lambda function code
+        env:
+          LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET }}
         run: |
-          aws lambda update-function-code \
-            --function-name iai-legal-demo \
-            --s3-bucket ${{ secrets.S3_BUCKET }} \
-            --s3-key lambda.zip \
-            --output text
+          for fn in api ai mcp ingest; do
+            aws lambda update-function-code \
+              --function-name iai-legal-demo-$fn \
+              --s3-bucket $LAMBDA_BUCKET \
+              --s3-key ${fn}_lambda.zip \
+              --output text
+          done
 
-      - name: Upload mcp_lambda.zip to S3
-        run: |
-          aws s3 cp mcp_lambda.zip s3://${{ secrets.S3_BUCKET }}/mcp_lambda.zip
-
-      - name: Update MCP Lambda function code
-        run: |
-          aws lambda update-function-code \
-            --function-name iai-legal-demo-mcp \
-            --s3-bucket ${{ secrets.S3_BUCKET }} \
-            --s3-key mcp_lambda.zip \
-            --output text
-
+  # ── 4. Deploy Frontend (CD — main branch only, tests must pass) ─────────────
   deploy-frontend:
     name: Deploy Frontend
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [test-python, test-frontend, changes]
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' &&
+      (needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -98,22 +155,22 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         run: npm run build
 
-      - name: Configure AWS credentials via OIDC
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-2
 
-      - name: Upload to S3 (assets — long cache)
+      - name: Upload assets to S3 (long cache — hashed filenames)
         run: |
-          aws s3 sync frontend/out/ s3://${{ secrets.S3_BUCKET }}/ --delete \
+          aws s3 sync frontend/out/ s3://${{ secrets.FRONTEND_BUCKET }}/ --delete \
             --cache-control "public,max-age=31536000,immutable" \
             --exclude "*.html" \
             --exclude "*.json"
 
-      - name: Upload to S3 (HTML/JSON — no cache)
+      - name: Upload HTML/JSON to S3 (no cache)
         run: |
-          aws s3 sync frontend/out/ s3://${{ secrets.S3_BUCKET }}/ \
+          aws s3 sync frontend/out/ s3://${{ secrets.FRONTEND_BUCKET }}/ \
             --cache-control "no-cache" \
             --include "*.html" \
             --include "*.json"

@@ -82,6 +82,8 @@ mkdir -p ingest_lambda_pkg/services/ingestion
 cp services/__init__.py ingest_lambda_pkg/services/__init__.py
 cp services/ingestion/__init__.py ingest_lambda_pkg/services/ingestion/__init__.py
 cp services/ingestion/handler.py  ingest_lambda_pkg/services/ingestion/handler.py
+# services/core is needed for _load_secrets() (Secrets Manager loader)
+cp -r services/core/ ingest_lambda_pkg/services/core/
 
 rm -f ingest_lambda.zip
 cd ingest_lambda_pkg && zip -r ../ingest_lambda.zip . -q && cd ..
@@ -91,4 +93,8 @@ INGEST_SIZE=$(du -sh ingest_lambda.zip | cut -f1)
 echo "✓ ingest_lambda.zip ($INGEST_SIZE)"
 
 echo ""
-echo "Done. Upload these zips to S3 then run: terraform apply"
+echo "Done. Upload zips to the Lambda artifacts bucket:"
+echo "  aws s3 cp api_lambda.zip    s3://\$LAMBDA_BUCKET/api_lambda.zip"
+echo "  aws s3 cp ai_lambda.zip     s3://\$LAMBDA_BUCKET/ai_lambda.zip"
+echo "  aws s3 cp mcp_lambda.zip    s3://\$LAMBDA_BUCKET/mcp_lambda.zip"
+echo "  aws s3 cp ingest_lambda.zip s3://\$LAMBDA_BUCKET/ingest_lambda.zip"

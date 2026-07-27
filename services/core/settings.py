@@ -1,4 +1,35 @@
+import json
+import logging
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+
+def _load_secrets() -> None:
+    """Fetch Secrets Manager secret and populate os.environ before Pydantic reads it.
+
+    Runs once at cold start when SECRET_ARN is set. No-op in local dev (SECRET_ARN unset).
+    Secrets Manager is authoritative when SECRET_ARN is present — values overwrite env.
+    """
+    arn = os.environ.get("SECRET_ARN")
+    if not arn:
+        return
+    try:
+        import boto3
+        region = os.environ.get("AWS_REGION_NAME", "ap-southeast-2")
+        client = boto3.client("secretsmanager", region_name=region)
+        resp = client.get_secret_value(SecretId=arn)
+        for key, value in json.loads(resp["SecretString"]).items():
+            os.environ[key] = value
+    except Exception as exc:
+        # Log and continue — Settings validation will raise a clear error
+        # if any required var is still missing.
+        logger.error("Secrets Manager fetch failed (%s): %s", arn, exc)
+
+
+_load_secrets()
 
 
 class Settings(BaseSettings):
