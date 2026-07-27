@@ -7,13 +7,13 @@ function getBakedApiUrl(): string {
   try {
     // Search for either the raw execute-api URL or a custom api.* domain
     const chunks = execSync(
-      'grep -rl "execute-api\\|api\\.probonoai" out/_next/static/chunks/ 2>/dev/null | head -1',
+      'grep -rl "execute-api\\|api\\.probonoai" dist/assets/ 2>/dev/null | head -1',
       { cwd: __dirname }
     ).toString().trim()
     if (!chunks) return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
     const content = execSync(`cat "${chunks}"`).toString()
     // Match execute-api URL (raw) or custom API domain — capture base URL without path
-    const m = content.match(/"(https?:\/\/(?:[^"]+\.execute-api\.[^"]+\.amazonaws\.com|api\.[^"\/]+))"/)
+    const m = content.match(/["'`](https?:\/\/(?:[^"'`]+\.execute-api\.[^"'`]+\.amazonaws\.com|api\.[^"'`\/]+))["'`]/)
     return m ? m[1] : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
   } catch {
     return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20000'
@@ -44,7 +44,7 @@ export default defineConfig({
     },
   ],
   webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
-    command: 'npx serve out -p 20001 --no-clipboard',
+    command: 'npm run preview',
     url: 'http://localhost:20001',
     reuseExistingServer: true,
     timeout: 10000,
