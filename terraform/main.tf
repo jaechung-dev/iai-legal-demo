@@ -130,25 +130,6 @@ resource "aws_cloudfront_function" "spa_rewrite" {
   code    = <<-EOF
     function handler(event) {
       var request = event.request;
-      var headers = request.headers;
-      var host = headers.host ? headers.host.value : "";
-
-      // ── Basic auth — preview subdomain only ────────────────────────────────
-      // www.probonoai.com.au is public. preview.probonoai.com.au is gated.
-      // To open preview to the public: remove the if block and re-apply.
-      if (host === "preview.probonoai.com.au") {
-        var expected = "Basic ${local.basic_auth_b64}";
-        var auth = headers.authorization ? headers.authorization.value : "";
-        if (auth !== expected) {
-          return {
-            statusCode: 401,
-            statusDescription: "Unauthorized",
-            headers: { "www-authenticate": { value: 'Basic realm="ProBonoAI Preview"' } }
-          };
-        }
-      }
-      // ── End basic auth ─────────────────────────────────────────────────────
-
       var uri = request.uri;
       if (uri === '/') return request;
       if (uri.endsWith('/')) {

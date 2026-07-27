@@ -196,11 +196,53 @@ export default function ConnectPage() {
 
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 space-y-8">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Connect an AI client</h1>
+              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Connect your AI client</h1>
               <p className="text-sm text-gray-500 mt-1.5">
-                Generate a long-lived MCP token to connect Claude Desktop or any MCP-compatible client.
-                Tokens are tied to your account and can be revoked at any time.
+                Use ProBono AI as a legal knowledge tool inside your AI assistant. Generate a token, paste the config,
+                and your AI can search NSW legislation and caselaw directly in conversation.
               </p>
+            </div>
+
+            {/* What this does */}
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-zinc-800">
+                <p className="text-sm font-semibold text-white">How it works</p>
+              </div>
+              <div className="p-5 space-y-3 text-sm text-zinc-400 leading-relaxed">
+                <p>
+                  ProBono AI exposes a <span className="text-zinc-200 font-medium">Model Context Protocol (MCP)</span> server
+                  that gives your AI assistant live access to NSW legal data — statutes, regulations, and court decisions.
+                </p>
+                <p>
+                  Once connected, you can ask your AI client things like <span className="text-emerald-400 italic">"What does the Residential Tenancies Act say about bond refunds?"</span> and
+                  it will search the actual legislation and return grounded answers with citations.
+                </p>
+              </div>
+            </div>
+
+            {/* Supported clients */}
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+                <p className="text-sm font-semibold text-gray-700">Supported AI clients</p>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {[
+                  { name: 'Claude Desktop', status: 'Supported', detail: 'Native MCP support — paste the config snippet below into claude_desktop_config.json', badge: 'bg-emerald-100 text-emerald-700' },
+                  { name: 'Claude.ai (web)', status: 'Supported', detail: 'Available on Pro and Team plans via the Integrations tab', badge: 'bg-emerald-100 text-emerald-700' },
+                  { name: 'Cursor / Windsurf', status: 'Supported', detail: 'Add the MCP server URL in your editor\'s MCP settings', badge: 'bg-emerald-100 text-emerald-700' },
+                  { name: 'Other MCP clients', status: 'Via mcp-remote', detail: 'Any client that supports the MCP standard works via npx mcp-remote', badge: 'bg-zinc-100 text-zinc-600' },
+                ].map(c => (
+                  <div key={c.name} className="px-5 py-4 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.badge}`}>{c.status}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">{c.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">

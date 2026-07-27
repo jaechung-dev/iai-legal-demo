@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Scale, MessageSquare, Search, Plug, LogOut, Menu, X, ClipboardList } from 'lucide-react'
+import { MessageSquare, Search, Plug, LogOut, Menu, X, ClipboardList } from 'lucide-react'
 import { useAuth } from '@/context/auth'
 import { APP_NAME, FEATURED_CASE } from '@/lib/config'
 
@@ -25,10 +25,17 @@ export default function Nav() {
     <header className="bg-zinc-950 border-b border-zinc-800 sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-6">
         <Link to="/" className="flex items-center gap-2.5 shrink-0">
-          <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <Scale className="w-4 h-4 text-white" />
+          <div className="w-7 h-7 rounded-lg border border-zinc-700 overflow-hidden shrink-0" style={{ background: '#0a0a0a' }}>
+            <div style={{
+              width: '100%', height: '100%',
+              backgroundImage: 'url(/justiti.png)',
+              backgroundSize: '320% auto',
+              backgroundPosition: '36% 8%',
+              backgroundRepeat: 'no-repeat',
+              filter: 'invert(1) brightness(0.9)',
+            }} />
           </div>
-          <span className="font-bold text-white text-sm tracking-tight hidden sm:block">{APP_NAME}</span>
+          <span className="font-serif font-semibold text-white text-sm tracking-wide hidden sm:block">{APP_NAME}</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-0.5 flex-1">
