@@ -572,8 +572,13 @@ export default function IntakePage() {
 
   useEffect(() => {
     const s = parseInt(searchParams.get('step') ?? '1', 10)
-    if (s >= 2 && s <= 4) setStep(s)
-  }, [])
+    // Only honour a deep-link past "About you" if that step is already complete
+    // in the saved draft — otherwise a first-time user would skip entering their
+    // personal details and land on step 2.
+    const p = loadDraft(user?.username ?? 'anon')?.personal
+    const aboutYouComplete = !!(p?.name?.trim() && p?.dob && p?.phone?.trim() && p?.suburb?.trim())
+    if (s >= 2 && s <= 4 && aboutYouComplete) setStep(s)
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveCurrent = useCallback(() => {
     saveDraft(user?.username ?? 'anon', { personal, matter, files })
