@@ -8,29 +8,11 @@ Semantic search and RAG-powered legal Q&A over NSW legislation and caselaw — s
 
 ## Architecture
 
-📐 **Visual diagrams:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — overall system, RAG retrieval flow, document ingestion pipeline, and MCP + AI architecture.
+![Overall system architecture — users hit CloudFront/S3 (React SPA), which calls an API Gateway HTTP API fronting four Lambdas (API, AI/RAG, MCP, Ingest); data and embeddings live in Supabase Postgres + pgvector, with OpenAI/Anthropic as external LLMs](docs/architecture/01-overview.png)
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          probonoai.com.au                                │
-├─────────────┬──────────────────┬─────────────┬──────────┬───────────────┤
-│  React SPA  │   API Lambda     │  AI Lambda  │   MCP    │ Ingest Lambda │
-│  Vite build │   FastAPI        │  FastAPI    │  Lambda  │ S3 → SQS trig │
-│  S3+CDN     │   auth/intake/   │  search/ask/│  FastMCP │               │
-│             │   conversations  │  chat + RAG │  Mangum  │               │
-└──────┬──────┴────────┬─────────┴──────┬──────┴────┬─────┴───────┬───────┘
-       │               │                │           │             │
-  CloudFront    API Gateway HTTP v2 (route-based Lambda targeting) │
-  + CF Function  (no extra cost per route vs $default catch-all)   │
-  SPA path rewrite                                              S3 Uploads
-       │               │                │           │          (case docs)
-       └───────────────┴────────────────┴───────────┴──────────────┘
-                                        │
-                              Supabase PostgreSQL
-                              pgvector 1536-dim HNSW
-```
+📐 More diagrams (RAG retrieval flow, document ingestion pipeline, MCP + AI): **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
-**One API Gateway, four Lambdas.** Routes split at the gateway — `/search /ask /chat` → AI Lambda (50MB, ~3s cold start), everything else → API Lambda (10MB, ~1s cold start). No extra cost vs. a single `$default` Lambda.
+**One API Gateway, four Lambdas.** Routes split at the gateway — `/search /ask /chat` → AI Lambda, everything else → API Lambda — so auth stays lean and independent of the heavier RAG stack. No extra cost vs. a single `$default` Lambda. (Real package sizes and cold starts are in the *Lambda package size & cold start* section below.)
 
 ---
 
