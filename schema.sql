@@ -86,6 +86,14 @@ CREATE TABLE IF NOT EXISTS password_resets (
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Google OAuth CSRF state — persisted so it survives across Lambda instances.
+CREATE TABLE IF NOT EXISTS oauth_states (
+    state       TEXT PRIMARY KEY,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS oauth_states_expires_idx ON oauth_states (expires_at);
+
 -- ── Case document chunks (user-uploaded, RAG-indexed) ────────────────────────
 
 CREATE TABLE IF NOT EXISTS case_chunks (

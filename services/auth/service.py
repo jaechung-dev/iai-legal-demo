@@ -46,10 +46,9 @@ SEED_IDS = {
 }
 SCOPES = ["search", "ask", "chat", "timeline"]
 
-# Fallback in-memory CSRF store — used when Redis is unavailable.
-# Breaks under Lambda concurrency (each instance has its own copy).
-# Set REDIS_URL to fix this.
-_oauth_states: dict = {}
+# OAuth CSRF state is persisted in Postgres (see _store/_consume_oauth_state)
+# so it survives across concurrent Lambda instances; Redis is used as a fast
+# path when REDIS_URL is set.
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
@@ -126,6 +125,28 @@ def _db_user(email: str) -> dict | None:
         ["id", "email", "name", "password_hash", "salt", "role", "provider", "email_verified"],
         row,
     ))
+
+
+def _store_oauth_state(state: str) -> None:
+    """Persist the OAuth CSRF state in Postgres so any Lambda instance can verify
+    it on callback (an in-memory dict is lost across concurrent instances)."""
+    with _db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO oauth_states (state, expires_at) "
+            "VALUES (%s, now() + interval '5 minutes') ON CONFLICT (state) DO NOTHING",
+            (state,),
+        )
+
+
+def _consume_oauth_state(state: str) -> bool:
+    """Single-use + expiry check, atomic via DELETE ... RETURNING."""
+    with _db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM oauth_states WHERE state = %s AND expires_at > now() RETURNING state",
+            (state,),
+        )
+        return cur.fetchone() is not None
 
 
 # ── JWT helpers ────────────────────────────────────────────────────────────────
@@ -564,7 +585,7 @@ async def google_login():
     if redis:
         await redis.setex(f"oauth_state:{state}", 300, "1")
     else:
-        _oauth_states[state] = True
+        _store_oauth_state(state)
     params = urlencode({
         "client_id":     GOOGLE_CLIENT_ID,
         "redirect_uri":  f"{BACKEND_URL}/auth/google/callback",
@@ -582,11 +603,10 @@ async def google_callback(code: str = Query(...), state: str = Query(...)):
     redis = await get_redis()
     if redis:
         valid = await redis.getdel(f"oauth_state:{state}")
-        if not valid:
-            raise HTTPException(400, "Invalid OAuth state")
     else:
-        if not _oauth_states.pop(state, None):
-            raise HTTPException(400, "Invalid OAuth state")
+        valid = _consume_oauth_state(state)
+    if not valid:
+        raise HTTPException(400, "Invalid or expired OAuth state")
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -612,6 +632,11 @@ async def google_callback(code: str = Query(...), state: str = Query(...)):
 
     user = _db_user(email)
     if user:
+        # Only link a Google login to an account that was itself created via
+        # Google. Refuse to sign in over an existing password account with the
+        # same email address (that would be account takeover).
+        if user["provider"] != "google":
+            return RedirectResponse(f"{FRONTEND_URL}/login?error=account_exists")
         user_id = user["id"]
     else:
         user_id = str(uuid.uuid4())
