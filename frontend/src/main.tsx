@@ -13,8 +13,14 @@ const app = (
   </StrictMode>
 )
 
-if (rootEl.hasChildNodes()) {
+// Only the landing route ("/") is pre-rendered, so only hydrate there. On any
+// other route the baked-in markup is the wrong (landing) page — discard it and
+// client-render cleanly to avoid hydration mismatches.
+if (rootEl.hasChildNodes() && window.location.pathname === '/') {
   hydrateRoot(rootEl, app)
 } else {
+  rootEl.innerHTML = ''
   createRoot(rootEl).render(app)
 }
+// Reveal once React has taken over (see the boot gate in index.html).
+document.documentElement.classList.remove('booting')

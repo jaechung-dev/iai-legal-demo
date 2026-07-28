@@ -8,6 +8,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Boot gate: the pre-rendered markup in #root is the landing page, and it
+         is served for every route. Redirect logged-in users off "/" and hide the
+         stale landing on app routes so it never flashes before React renders. -->
+    <style>html.booting #root{display:none !important}</style>
+    <script>
+      (function () {
+        try {
+          var p = location.pathname, s = location.search;
+          var t = localStorage.getItem('iai_token'), authed = false;
+          if (t) { try { authed = JSON.parse(atob(t.split('.')[1])).exp * 1000 > Date.now(); } catch (e) {} }
+          if (authed && p === '/' && s.indexOf('preview') === -1) { location.replace('/chat'); return; }
+          if (p !== '/') {
+            document.documentElement.className += ' booting';
+            setTimeout(function () { document.documentElement.classList.remove('booting'); }, 4000);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body style="background:#09090b;margin:0">
     <div id="root"></div>
