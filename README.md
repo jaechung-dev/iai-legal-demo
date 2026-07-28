@@ -342,6 +342,60 @@ Next.js forces a mental model: **every page is a server contract**. Vite's model
 ---
 
 <details>
+<summary><strong>Accessibility (WCAG 2.1 AA)</strong></summary>
+
+Accessibility is treated as a requirement, not a finishing touch — the app is
+validated against WCAG 2.1 A/AA with automated `axe-core` audits (run via
+Playwright against the landing page, login modal, and authenticated chat view).
+**Current status: 0 violations** across `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`.
+
+**In place**
+- **Accessible names** — every icon-only control (modal close, chat send) carries an `aria-label`; decorative glyphs are `aria-hidden`.
+- **Colour contrast** — all text meets the 4.5:1 AA ratio. The dark blood-red/gold theme was tuned so muted text (footers, hints, empty states) clears the threshold instead of relying on faint greys.
+- **Non-text content** — the Lady Justice hero is a CSS background image, so it's exposed to assistive tech via `role="img"` + a descriptive `aria-label`.
+- **Semantic & keyboard** — native `<button>`/`<a>` (no click handlers on `<div>`s), controlled inputs with placeholders + `autoComplete`, focus-visible rings, and a modal that dismisses on outside-click.
+
+**Roadmap**
+- Wire the axe audit into the Playwright E2E suite so a11y regressions fail CI.
+- Focus trap + `Escape`-to-close on the login modal.
+- `aria-live="polite"` on the streamed chat response so screen readers announce incoming tokens.
+
+</details>
+
+---
+
+<details>
+<summary><strong>SEO — and the Next.js tradeoff</strong></summary>
+
+The app is a client-rendered SPA, but the one page that matters for search — the
+public landing — is handled explicitly.
+
+**In place**
+- **Build-time pre-render** — the landing page is rendered to real HTML at build time (a Playwright snapshot in `postbuild`), so crawlers get full content on the first byte instead of an empty `<div id="root">`. Same step removes the CSR flash.
+- **Per-route metadata** — `react-helmet-async` (`HelmetProvider`) drives `<title>` / meta tags.
+- **`sitemap.xml` + `robots.txt`** — the sitemap lists public routes; robots allows `/` and disallows the auth-gated app routes (`/chat`, `/my-case`, …) that have no crawl value.
+- **Fast first paint** — dark background is painted before hydration (no white flash), and a boot gate keeps the pre-rendered landing from flashing on app routes.
+
+**Tradeoff vs Next.js**
+
+Next.js gives SSR/SSG for every route for free — but this app is ~90% auth-gated
+(chat, search, my-case, connect). Those pages have nothing for Google to index
+and can't be crawled anyway, so paying for full SSR everywhere would be weight
+without benefit. Build-time pre-render of the single public route captures the
+SEO win (crawlable HTML + fast FCP) at a fraction of the cost.
+
+Where Next.js *would* win: if the product added public, indexable content —
+marketing pages, or a legislation/case-law browser with per-item URLs
+(`/cases/{slug}`), or a blog. Those need HTML per route at scale, which is exactly
+SSG/SSR's job. The recovery path (see the Frontend section) is `vite-plugin-ssg`
+for static content or React Router v7 framework mode for true SSR — incremental,
+not a rewrite.
+
+</details>
+
+---
+
+<details>
 <summary><strong>Services & API Reference</strong></summary>
 
 ### API Lambda (`services/api/`) — ~10MB, ~1s cold start
