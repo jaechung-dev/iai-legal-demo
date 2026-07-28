@@ -8,6 +8,8 @@ Semantic search and RAG-powered legal Q&A over NSW legislation and caselaw — s
 
 ## Architecture
 
+📐 **Visual diagrams:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — overall system, RAG retrieval flow, document ingestion pipeline, and MCP + AI architecture.
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          probonoai.com.au                                │
