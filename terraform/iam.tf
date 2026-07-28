@@ -3,9 +3,14 @@
 data "aws_caller_identity" "current" {}
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["2b18947a6a9fc7764fd8b5fb18a863b0c6dac24f"]
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  # GitHub Actions OIDC intermediate-cert thumbprints. The previous single
+  # value was invalid, which made STS reject every AssumeRoleWithWebIdentity.
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcb",
+  ]
 }
 
 resource "aws_iam_role" "github_actions" {
