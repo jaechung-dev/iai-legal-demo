@@ -94,6 +94,18 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 );
 CREATE INDEX IF NOT EXISTS oauth_states_expires_idx ON oauth_states (expires_at);
 
+-- Site-usage / sign-in audit log (who logged in, when, from where).
+CREATE TABLE IF NOT EXISTS access_logs (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     TEXT,
+    email       TEXT,
+    method      TEXT,
+    ip          TEXT,
+    user_agent  TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS access_logs_created_idx ON access_logs (created_at DESC);
+
 -- ── Case document chunks (user-uploaded, RAG-indexed) ────────────────────────
 
 CREATE TABLE IF NOT EXISTS case_chunks (

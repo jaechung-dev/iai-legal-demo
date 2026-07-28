@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 
 import httpx
 import psycopg2
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from jose import jwt
 from pydantic import BaseModel
@@ -147,6 +147,24 @@ def _consume_oauth_state(state: str) -> bool:
             (state,),
         )
         return cur.fetchone() is not None
+
+
+def _log_access(user_id: str, email: str, method: str, request: Request | None) -> None:
+    """Record a sign-in (who / when / from where) for site-usage auditing.
+    Best-effort: never blocks or fails a login."""
+    try:
+        ip, ua = "", ""
+        if request is not None:
+            ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+            ua = (request.headers.get("user-agent") or "")[:400]
+        with _db() as conn:
+            conn.cursor().execute(
+                "INSERT INTO access_logs (user_id, email, method, ip, user_agent) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (str(user_id), email, method, ip, ua),
+            )
+    except Exception:  # pragma: no cover — never block a login on logging
+        pass
 
 
 # ── JWT helpers ────────────────────────────────────────────────────────────────
@@ -331,7 +349,7 @@ def auth_register(req: RegisterRequest):
 
 
 @router.post("/login")
-async def auth_login(req: LoginRequest):
+async def auth_login(req: LoginRequest, request: Request):
     await _rate_limit(f"rate:login:{req.username.lower().strip()}")
     seed = SEED_USERS.get(req.username)
     if seed and seed["password"] == req.password:
@@ -342,6 +360,7 @@ async def auth_login(req: LoginRequest):
             "username": req.username, "name": seed["name"],
             "role": seed["role"], "email_verified": True,
         }
+        _log_access(SEED_IDS[req.username], req.username, "demo", request)
         return tokens
 
     email = req.username.lower().strip()
@@ -359,6 +378,7 @@ async def auth_login(req: LoginRequest):
         "username": email, "name": user["name"],
         "role": user["role"], "email_verified": user["email_verified"],
     }
+    _log_access(user["id"], email, "password", request)
     return tokens
 
 
@@ -599,7 +619,7 @@ async def google_login():
 
 
 @router.get("/google/callback")
-async def google_callback(code: str = Query(...), state: str = Query(...)):
+async def google_callback(request: Request, code: str = Query(...), state: str = Query(...)):
     redis = await get_redis()
     if redis:
         valid = await redis.getdel(f"oauth_state:{state}")
@@ -648,6 +668,7 @@ async def google_callback(code: str = Query(...), state: str = Query(...)):
             )
 
     tokens = _issue(user_id, email, name, user["role"] if user else "user", email_verified=True)
+    _log_access(user_id, email, "google", request)
     return RedirectResponse(
         f"{FRONTEND_URL}/auth/callback"
         f"?token={tokens['access_token']}&refresh={tokens['refresh_token']}"
