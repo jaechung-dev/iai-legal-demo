@@ -12,6 +12,17 @@ set -e
 
 PY_FLAGS="--platform manylinux2014_x86_64 --python-version 3.12 --only-binary=:all:"
 
+# Drop weight that never needs to ship: boto3/botocore are already in the Lambda
+# Python runtime, and *.dist-info / __pycache__ are install metadata. This alone
+# removes ~20 MB from every package (uvicorn[standard]'s uvloop etc. are handled
+# by using plain `uvicorn` in requirements).
+slim() {
+  local d="$1"
+  rm -rf "$d"/boto3 "$d"/botocore
+  find "$d" -depth -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+  find "$d" -maxdepth 1 -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+}
+
 # Remove any stale nested build artifacts before packaging
 find services -name "lambda_pkg" -o -name "*_lambda_pkg" | xargs rm -rf 2>/dev/null || true
 
@@ -29,6 +40,7 @@ rm -rf api_lambda_pkg/services/ai \
        api_lambda_pkg/services/ingestion
 
 rm -f api_lambda.zip
+slim api_lambda_pkg
 cd api_lambda_pkg && zip -r ../api_lambda.zip . -q && cd ..
 rm -rf api_lambda_pkg
 
@@ -48,6 +60,7 @@ rm -rf ai_lambda_pkg/services/api \
        ai_lambda_pkg/services/ingestion
 
 rm -f ai_lambda.zip
+slim ai_lambda_pkg
 cd ai_lambda_pkg && zip -r ../ai_lambda.zip . -q && cd ..
 rm -rf ai_lambda_pkg
 
@@ -67,6 +80,7 @@ rm -rf mcp_lambda_pkg/services/api \
        mcp_lambda_pkg/services/ingestion
 
 rm -f mcp_lambda.zip
+slim mcp_lambda_pkg
 cd mcp_lambda_pkg && zip -r ../mcp_lambda.zip . -q && cd ..
 rm -rf mcp_lambda_pkg
 
@@ -86,6 +100,7 @@ cp services/ingestion/handler.py  ingest_lambda_pkg/services/ingestion/handler.p
 cp -r services/core/ ingest_lambda_pkg/services/core/
 
 rm -f ingest_lambda.zip
+slim ingest_lambda_pkg
 cd ingest_lambda_pkg && zip -r ../ingest_lambda.zip . -q && cd ..
 rm -rf ingest_lambda_pkg
 
