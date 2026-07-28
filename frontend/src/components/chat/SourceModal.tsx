@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { X, ExternalLink } from 'lucide-react'
+import { X } from 'lucide-react'
 import type { ChatSource } from '@/types/chat'
 
 export default function SourceModal({ source: s, onClose }: { source: ChatSource; onClose: () => void }) {
@@ -8,8 +8,6 @@ export default function SourceModal({ source: s, onClose }: { source: ChatSource
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-
-  const austlii = `https://www.austlii.edu.au/cgi-bin/sinosrch.cgi?method=auto&query=${encodeURIComponent(s.citation)}`
 
   return (
     <div
@@ -46,17 +44,6 @@ export default function SourceModal({ source: s, onClose }: { source: ChatSource
 
         <div className="px-5 py-4 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
           {s.content}
-        </div>
-
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50">
-          <a
-            href={austlii}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600 hover:text-rose-700"
-          >
-            <ExternalLink className="w-3.5 h-3.5" /> View on AustLII
-          </a>
         </div>
       </div>
     </div>

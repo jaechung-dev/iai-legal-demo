@@ -23,11 +23,11 @@ const SUGGESTED = [
 // (e.g. a cold Lambda) doesn't look frozen.
 function ThinkingIndicator({ searching }: { searching: boolean }) {
   return (
-    <span className="flex items-center gap-2 text-gray-500">
-      <span className="flex gap-1" aria-hidden="true">
-        <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce [animation-delay:0ms]" />
-        <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce [animation-delay:150ms]" />
-        <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce [animation-delay:300ms]" />
+    <span className="flex items-center gap-2.5 text-gray-500">
+      <span className="flex gap-1.5" aria-hidden="true">
+        <span className="w-2 h-2 bg-rose-400 rounded-full animate-bounce" style={{ animationDuration: '1.4s', animationDelay: '0ms' }} />
+        <span className="w-2 h-2 bg-rose-400 rounded-full animate-bounce" style={{ animationDuration: '1.4s', animationDelay: '220ms' }} />
+        <span className="w-2 h-2 bg-rose-400 rounded-full animate-bounce" style={{ animationDuration: '1.4s', animationDelay: '440ms' }} />
       </span>
       <span className="text-xs">{searching ? 'Searching NSW legislation & caselaw…' : 'Reading sources & drafting…'}</span>
     </span>
