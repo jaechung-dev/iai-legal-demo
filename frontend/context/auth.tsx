@@ -183,6 +183,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ls?.removeItem('iai_token')
     ls?.removeItem('iai_refresh')
     ls?.removeItem('iai_anon_count')
+    // Wipe any locally-cached intake drafts so private legal matter text never
+    // lingers for the next account on this browser.
+    try {
+      if (ls) {
+        for (let i = ls.length - 1; i >= 0; i--) {
+          const k = ls.key(i)
+          if (k && k.startsWith('iai_intake_draft')) ls.removeItem(k)
+        }
+      }
+    } catch {}
     setToken(null)
     setUser(null)
   }, [])

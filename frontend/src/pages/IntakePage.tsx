@@ -72,11 +72,14 @@ function fmtSize(bytes: number) {
   return `${(bytes / 1048576).toFixed(1)} MB`
 }
 
-function loadDraft() {
-  try { return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') } catch { return null }
+// Draft is scoped per-user so one account's private matter never appears in
+// another's on the same browser.
+function draftKey(uid: string) { return `${DRAFT_KEY}_${uid}` }
+function loadDraft(uid: string) {
+  try { return JSON.parse(localStorage.getItem(draftKey(uid)) ?? 'null') } catch { return null }
 }
-function saveDraft(data: object) {
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(data)) } catch {}
+function saveDraft(uid: string, data: object) {
+  try { localStorage.setItem(draftKey(uid), JSON.stringify(data)) } catch {}
 }
 
 async function uploadToS3(file: File, token: string | null): Promise<string> {
@@ -559,12 +562,13 @@ export default function IntakePage() {
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const d = loadDraft()
+    try { localStorage.removeItem(DRAFT_KEY) } catch {}   // purge legacy shared key (cross-user leak)
+    const d = loadDraft(user?.username ?? 'anon')
     if (!d) return
     if (d.personal) setPersonal(d.personal)
     if (d.matter)   setMatter(d.matter)
     if (d.files)    setFiles(d.files)
-  }, [])
+  }, [user?.username])
 
   useEffect(() => {
     const s = parseInt(searchParams.get('step') ?? '1', 10)
@@ -572,8 +576,8 @@ export default function IntakePage() {
   }, [])
 
   const saveCurrent = useCallback(() => {
-    saveDraft({ personal, matter, files })
-  }, [personal, matter, files])
+    saveDraft(user?.username ?? 'anon', { personal, matter, files })
+  }, [personal, matter, files, user?.username])
 
   useEffect(() => { saveCurrent() }, [saveCurrent])
 
@@ -637,9 +641,9 @@ export default function IntakePage() {
       })
       if (!res.ok) throw new Error('Submission failed')
       const data = await res.json()
-      saveDraft({ personal, matter, files, submittedAt: new Date().toISOString(), id: data.id })
+      saveDraft(user?.username ?? 'anon', { personal, matter, files, submittedAt: new Date().toISOString(), id: data.id })
     } catch {
-      saveDraft({ personal, matter, files, submittedAt: new Date().toISOString() })
+      saveDraft(user?.username ?? 'anon', { personal, matter, files, submittedAt: new Date().toISOString() })
     } finally {
       setLoading(false)
       setSubmitted(true)
