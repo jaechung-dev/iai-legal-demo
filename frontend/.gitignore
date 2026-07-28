@@ -17,8 +17,11 @@
 /.next/
 /out/
 
-# production
+# production (Vite build output + local screenshots/test artifacts)
 /build
+/dist
+/screenshots
+/e2e/screenshots
 
 # misc
 .DS_Store
@@ -30,8 +33,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — secrets stay local; public build config is committed
 .env*
+!.env.production
 
 # vercel
 .vercel

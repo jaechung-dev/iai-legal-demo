@@ -14,12 +14,15 @@ permissions:
   id-token: write   # required for OIDC token exchange
   contents: read
 
-# ── Required GitHub secrets ───────────────────────────────────────────────────
-# AWS_DEPLOY_ROLE_ARN   — terraform output github_actions_role_arn
-# FRONTEND_BUCKET       — terraform output s3_bucket
-# LAMBDA_BUCKET         — terraform output lambda_artifacts_bucket
-# CF_DIST_ID            — CloudFront distribution ID (terraform output cloudfront_url → extract ID)
-# NEXT_PUBLIC_API_URL   — https://api.probonoai.com.au
+# ── Config sources ────────────────────────────────────────────────────────────
+# GitHub secret (only one — needed to authenticate before any AWS call):
+#   AWS_DEPLOY_ROLE_ARN   arn:aws:iam::757953088569:role/iai-legal-demo-github-actions
+#
+# Deploy targets (frontend bucket, lambda bucket, CloudFront ID) are read at
+# deploy time from AWS Secrets Manager: secret `iai-legal-demo/deploy-config`
+# (provisioned in terraform/secrets.tf; role granted read in terraform/iam.tf).
+#
+# Public build config (API/APP/MCP URLs) lives in frontend/.env.production.
 
 jobs:
   # ── 1. Test ─────────────────────────────────────────────────────────────────
@@ -106,9 +109,14 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-2
 
+      - name: Load deploy config from Secrets Manager
+        run: |
+          CFG=$(aws secretsmanager get-secret-value \
+            --secret-id iai-legal-demo/deploy-config \
+            --query SecretString --output text)
+          echo "LAMBDA_BUCKET=$(echo "$CFG" | jq -r .lambda_bucket)" >> "$GITHUB_ENV"
+
       - name: Upload ZIPs to Lambda artifacts bucket
-        env:
-          LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET }}
         run: |
           aws s3 cp api_lambda.zip    s3://$LAMBDA_BUCKET/api_lambda.zip
           aws s3 cp ai_lambda.zip     s3://$LAMBDA_BUCKET/ai_lambda.zip
@@ -116,8 +124,6 @@ jobs:
           aws s3 cp ingest_lambda.zip s3://$LAMBDA_BUCKET/ingest_lambda.zip
 
       - name: Update Lambda function code
-        env:
-          LAMBDA_BUCKET: ${{ secrets.LAMBDA_BUCKET }}
         run: |
           for fn in api ai mcp ingest; do
             aws lambda update-function-code \
@@ -149,10 +155,14 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Build
+      # The `postbuild` step pre-renders the landing page with Playwright to
+      # kill the CSR flash, so CI needs the chromium browser + its OS deps.
+      - name: Install Playwright chromium
         working-directory: frontend
-        env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Build (Vite → frontend/dist, prod config from .env.production)
+        working-directory: frontend
         run: npm run build
 
       - name: Configure AWS credentials (OIDC)
@@ -161,23 +171,29 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ap-southeast-2
 
-      - name: Upload assets to S3 (long cache — hashed filenames)
+      - name: Load deploy config from Secrets Manager
         run: |
-          aws s3 sync frontend/out/ s3://${{ secrets.FRONTEND_BUCKET }}/ --delete \
-            --cache-control "public,max-age=31536000,immutable" \
-            --exclude "*.html" \
-            --exclude "*.json"
+          CFG=$(aws secretsmanager get-secret-value \
+            --secret-id iai-legal-demo/deploy-config \
+            --query SecretString --output text)
+          echo "FRONTEND_BUCKET=$(echo "$CFG" | jq -r .frontend_bucket)" >> "$GITHUB_ENV"
+          echo "CF_DIST_ID=$(echo "$CFG" | jq -r .cf_dist_id)" >> "$GITHUB_ENV"
 
-      - name: Upload HTML/JSON to S3 (no cache)
+      - name: Upload hashed assets to S3 (immutable, long cache)
         run: |
-          aws s3 sync frontend/out/ s3://${{ secrets.FRONTEND_BUCKET }}/ \
-            --cache-control "no-cache" \
-            --include "*.html" \
-            --include "*.json"
+          aws s3 sync frontend/dist/ s3://$FRONTEND_BUCKET/ --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html"
+
+      - name: Upload index.html (no cache, correct content-type)
+        run: |
+          aws s3 cp frontend/dist/index.html s3://$FRONTEND_BUCKET/index.html \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html"
 
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets.CF_DIST_ID }} \
+            --distribution-id $CF_DIST_ID \
             --paths "/*" \
             --output text

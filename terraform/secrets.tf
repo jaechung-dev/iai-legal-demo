@@ -47,3 +47,23 @@ output "secret_arn" {
   description = "Set as SECRET_ARN on Lambda functions. Content is fetched at cold start — ARN itself is not sensitive."
   value       = aws_secretsmanager_secret.app.arn
 }
+
+# ── CI/CD deploy config ───────────────────────────────────────────────────────
+# Non-sensitive deploy targets (bucket names, CloudFront ID) that GitHub Actions
+# reads at deploy time via OIDC — instead of duplicating them as GitHub secrets.
+# The only value that must stay in GitHub is AWS_DEPLOY_ROLE_ARN, since it's
+# needed to authenticate before any AWS/Secrets Manager call can be made.
+resource "aws_secretsmanager_secret" "deploy_config" {
+  name                    = "${var.project}/deploy-config"
+  description             = "CI/CD deploy targets read by GitHub Actions via OIDC"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "deploy_config" {
+  secret_id = aws_secretsmanager_secret.deploy_config.id
+  secret_string = jsonencode({
+    frontend_bucket = aws_s3_bucket.frontend.bucket
+    lambda_bucket   = aws_s3_bucket.lambda_artifacts.bucket
+    cf_dist_id      = aws_cloudfront_distribution.frontend.id
+  })
+}

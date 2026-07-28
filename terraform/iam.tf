@@ -67,10 +67,18 @@ resource "aws_iam_role_policy" "github_actions" {
         ]
       },
       {
-        Sid    = "CloudFront"
-        Effect = "Allow"
-        Action = ["cloudfront:CreateInvalidation"]
+        Sid      = "CloudFront"
+        Effect   = "Allow"
+        Action   = ["cloudfront:CreateInvalidation"]
         Resource = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${aws_cloudfront_distribution.frontend.id}"
+      },
+      {
+        # Read-only, scoped to the deploy-config secret so CI can resolve its
+        # deploy targets without them being stored as GitHub secrets.
+        Sid      = "DeployConfigSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = aws_secretsmanager_secret.deploy_config.arn
       }
     ]
   })
@@ -113,8 +121,8 @@ resource "aws_iam_role_policy" "lambda_api_ses" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["ses:SendEmail", "ses:SendRawEmail"]
+      Effect = "Allow"
+      Action = ["ses:SendEmail", "ses:SendRawEmail"]
       # Scoped to the verified domain identity — not * (would allow any identity in account)
       Resource = "arn:aws:ses:${var.aws_region}:${data.aws_caller_identity.current.account_id}:identity/probonoai.com.au"
     }]
