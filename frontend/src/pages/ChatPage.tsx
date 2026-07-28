@@ -1,14 +1,12 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 import { MessageSquare, ChevronRight, SidebarOpen, PanelLeft } from 'lucide-react'
-import { VariableSizeList as VList } from 'react-window'
 import Nav from '../components/Nav'
 import LoginModal from '../components/LoginModal'
 import ConversationSidebar from '../components/chat/ConversationSidebar'
 import SourcesPanel from '../components/chat/SourcesPanel'
 import ChatInput from '../components/chat/ChatInput'
 import TypewriterText from '../components/chat/TypewriterText'
-import { type RowData } from '../components/chat/SourceCard'
 import { useGuestQuota } from '@/hooks/useGuestQuota'
 import { useAuth } from '@/context/auth'
 import { API_URL as API } from '@/lib/config'
@@ -20,6 +18,21 @@ const SUGGESTED = [
   'What is the maximum sentence for fraud?',
   'What happens at sentencing?',
 ]
+
+// Feedback while the model is retrieving + drafting, so a slow first token
+// (e.g. a cold Lambda) doesn't look frozen.
+function ThinkingIndicator({ searching }: { searching: boolean }) {
+  return (
+    <span className="flex items-center gap-2 text-gray-500">
+      <span className="flex gap-1" aria-hidden="true">
+        <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce [animation-delay:0ms]" />
+        <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce [animation-delay:150ms]" />
+        <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce [animation-delay:300ms]" />
+      </span>
+      <span className="text-xs">{searching ? 'Searching NSW legislation & caselaw…' : 'Reading sources & drafting…'}</span>
+    </span>
+  )
+}
 
 export default function ChatPage() {
   const [messages, setMessages]         = useState<ChatMessage[]>([])
@@ -35,8 +48,6 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen]   = useState(true)
   const [deletingId, setDeletingId]     = useState<string | null>(null)
 
-  const vlistRef   = useRef<VList<RowData>>(null)
-  const itemSizes  = useRef<number[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
   const { gate, showGate, dismissGate } = useGuestQuota()
@@ -106,7 +117,7 @@ export default function ChatPage() {
     if (!question.trim() || sendingRef.current) return
     sendingRef.current = true
     if (!gate()) { sendingRef.current = false; return }
-    setInput(''); setLoading(true); setSources([]); itemSizes.current = []
+    setInput(''); setLoading(true); setSources([])
 
     let convId = conversationId
     if (!convId && token) {
@@ -173,19 +184,6 @@ export default function ChatPage() {
       } catch {}
     }
   }
-
-  const handleSourceResize = useCallback((index: number, height: number) => {
-    if (itemSizes.current[index] === height) return
-    itemSizes.current[index] = height
-    vlistRef.current?.resetAfterIndex(index, false)
-  }, [])
-
-  const getSourceItemSize = useCallback((index: number) => itemSizes.current[index] ?? 108, [])
-
-  const stableItemData = useMemo<RowData>(
-    () => ({ sources, onResize: handleSourceResize }),
-    [sources, handleSourceResize],
-  )
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -271,7 +269,11 @@ export default function ChatPage() {
                         : 'bg-gray-50 text-gray-800 rounded-bl-none border border-gray-100'
                     }`}>
                       {m.role === 'assistant'
-                        ? <TypewriterText text={m.content} active={loading && i === messages.length - 1} />
+                        ? (m.content
+                            ? <TypewriterText text={m.content} active={loading && i === messages.length - 1} />
+                            : (loading && i === messages.length - 1
+                                ? <ThinkingIndicator searching={sources.length === 0} />
+                                : null))
                         : m.content
                       }
                     </div>
@@ -289,9 +291,6 @@ export default function ChatPage() {
           show={showSources}
           onHide={() => setShowSources(false)}
           sources={sources}
-          vlistRef={vlistRef}
-          getItemSize={getSourceItemSize}
-          itemData={stableItemData}
         />
       </div>
     </div>

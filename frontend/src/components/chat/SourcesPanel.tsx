@@ -1,19 +1,17 @@
+import { useState } from 'react'
 import { BookOpen, X } from 'lucide-react'
-import { VariableSizeList as VList } from 'react-window'
-import AutoSizer, { Size } from 'react-virtualized-auto-sizer'
-import { SourceRow, type RowData } from './SourceCard'
+import { SourceCard } from './SourceCard'
+import SourceModal from './SourceModal'
 import type { ChatSource } from '@/types/chat'
 
 type Props = {
   show: boolean
   onHide: () => void
   sources: ChatSource[]
-  vlistRef: React.RefObject<VList<RowData> | null>
-  getItemSize: (i: number) => number
-  itemData: RowData
 }
 
-export default function SourcesPanel({ show, onHide, sources, vlistRef, getItemSize, itemData }: Props) {
+export default function SourcesPanel({ show, onHide, sources }: Props) {
+  const [selected, setSelected] = useState<ChatSource | null>(null)
   return (
     <div className={`
       ${show ? 'flex' : 'hidden'} lg:flex
@@ -29,7 +27,7 @@ export default function SourcesPanel({ show, onHide, sources, vlistRef, getItemS
             {sources.length}
           </span>
         )}
-        <button onClick={onHide} className="lg:hidden ml-1 text-gray-400 hover:text-gray-600 p-1">
+        <button onClick={onHide} aria-label="Hide sources" className="lg:hidden ml-1 text-gray-400 hover:text-gray-600 p-1">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -42,24 +40,14 @@ export default function SourcesPanel({ show, onHide, sources, vlistRef, getItemS
           <p className="text-xs text-gray-500 leading-relaxed">Retrieved legislation and caselaw will appear here</p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0">
-          <AutoSizer>
-            {({ height, width }: Size) => (
-              <VList<RowData>
-                ref={vlistRef}
-                height={height}
-                width={width}
-                itemCount={sources.length}
-                itemSize={getItemSize}
-                itemData={itemData}
-                overscanCount={3}
-              >
-                {SourceRow}
-              </VList>
-            )}
-          </AutoSizer>
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+          {sources.map((s, i) => (
+            <SourceCard key={`${s.citation}-${i}`} source={s} onOpen={setSelected} />
+          ))}
         </div>
       )}
+
+      {selected && <SourceModal source={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }
