@@ -68,10 +68,11 @@ resource "aws_iam_role_policy" "github_actions" {
         ]
       },
       {
-        # Write-only — Lambda service reads ZIPs internally using account-level access
+        # GetObject is required: lambda:UpdateFunctionCode with an S3 source
+        # validates that the *calling* principal can read the artifact.
         Sid    = "LambdaArtifactsS3"
         Effect = "Allow"
-        Action = ["s3:PutObject", "s3:ListBucket"]
+        Action = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
         Resource = [
           "arn:aws:s3:::${aws_s3_bucket.lambda_artifacts.bucket}",
           "arn:aws:s3:::${aws_s3_bucket.lambda_artifacts.bucket}/*"
