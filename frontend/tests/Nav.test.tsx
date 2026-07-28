@@ -37,20 +37,20 @@ describe('Nav', () => {
     renderNav('/search')
     const searchLink = screen.getByText('Search').closest('a')
     const chatLink   = screen.getByText('Chat').closest('a')
-    expect(searchLink).toHaveClass('text-emerald-400')
-    expect(chatLink).not.toHaveClass('text-emerald-400')
+    expect(searchLink).toHaveClass('text-rose-400')
+    expect(chatLink).not.toHaveClass('text-rose-400')
   })
 
   test('chat link is active when pathname is /chat', () => {
     renderNav('/chat')
     const chatLink = screen.getByText('Chat').closest('a')
-    expect(chatLink).toHaveClass('text-emerald-400')
+    expect(chatLink).toHaveClass('text-rose-400')
   })
 
-  test('logo links to home', () => {
+  test('logo links to home (landing preview)', () => {
     renderNav()
     const logoLink = screen.getByRole('link', { name: /probono ai/i })
-    expect(logoLink).toHaveAttribute('href', '/')
+    expect(logoLink).toHaveAttribute('href', '/?preview=1')
   })
 
   test('shows Sign in button when no user is logged in', () => {
