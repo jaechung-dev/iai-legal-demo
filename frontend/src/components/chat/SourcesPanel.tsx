@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { BookOpen, X } from 'lucide-react'
+import { FixedSizeList as List, type ListChildComponentProps } from 'react-window'
+import AutoSizer, { type Size } from 'react-virtualized-auto-sizer'
 import { SourceCard } from './SourceCard'
 import SourceModal from './SourceModal'
 import type { ChatSource } from '@/types/chat'
@@ -10,8 +12,27 @@ type Props = {
   sources: ChatSource[]
 }
 
+type RowData = { sources: ChatSource[]; onOpen: (s: ChatSource) => void }
+
+// Cards are a fixed-height preview (they open a modal, so they never resize) —
+// which lets us virtualize with a plain FixedSizeList. Overkill for a handful
+// of sources, but it keeps the list O(visible) if a query ever returns many.
+const ROW_HEIGHT = 148
+
+function Row({ index, style, data }: ListChildComponentProps<RowData>) {
+  return (
+    <div style={style}>
+      <div className="px-3 pb-2">
+        <SourceCard source={data.sources[index]} onOpen={data.onOpen} />
+      </div>
+    </div>
+  )
+}
+
 export default function SourcesPanel({ show, onHide, sources }: Props) {
   const [selected, setSelected] = useState<ChatSource | null>(null)
+  const itemData: RowData = { sources, onOpen: setSelected }
+
   return (
     <div className={`
       ${show ? 'flex' : 'hidden'} lg:flex
@@ -40,10 +61,21 @@ export default function SourcesPanel({ show, onHide, sources }: Props) {
           <p className="text-xs text-gray-500 leading-relaxed">Retrieved legislation and caselaw will appear here</p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
-          {sources.map((s, i) => (
-            <SourceCard key={`${s.citation}-${i}`} source={s} onOpen={setSelected} />
-          ))}
+        <div className="flex-1 min-h-0 pt-1">
+          <AutoSizer>
+            {({ height, width }: Size) => (
+              <List
+                height={height}
+                width={width}
+                itemCount={sources.length}
+                itemSize={ROW_HEIGHT}
+                itemData={itemData}
+                overscanCount={4}
+              >
+                {Row}
+              </List>
+            )}
+          </AutoSizer>
         </div>
       )}
 

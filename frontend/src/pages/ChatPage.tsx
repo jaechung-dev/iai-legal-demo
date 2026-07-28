@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
-import { MessageSquare, ChevronRight, SidebarOpen, PanelLeft } from 'lucide-react'
+import { Scale, ChevronRight, SidebarOpen, PanelLeft } from 'lucide-react'
 import Nav from '../components/Nav'
 import LoginModal from '../components/LoginModal'
 import ConversationSidebar from '../components/chat/ConversationSidebar'
@@ -237,8 +237,8 @@ export default function ChatPage() {
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto text-center">
-                <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mb-5 shadow-lg">
-                  <MessageSquare className="w-7 h-7 text-rose-400" />
+                <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg">
+                  <Scale className="w-7 h-7 text-zinc-950" strokeWidth={2.5} />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900 mb-2">Ask about NSW law</h2>
                 <p className="text-sm text-gray-500 leading-relaxed mb-8">
@@ -259,8 +259,8 @@ export default function ChatPage() {
                 {messages.map((m, i) => (
                   <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {m.role === 'assistant' && (
-                      <div className="w-8 h-8 bg-gray-900 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                        <MessageSquare className="w-4 h-4 text-rose-400" />
+                      <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                        <Scale className="w-4 h-4 text-zinc-950" strokeWidth={2.5} />
                       </div>
                     )}
                     <div className={`max-w-[82%] rounded-2xl px-4 py-3.5 text-sm leading-relaxed shadow-sm ${

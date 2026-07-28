@@ -14,7 +14,7 @@ export const SourceCard = memo(function SourceCard(
       className="w-full text-left bg-white border border-gray-100 rounded-xl p-3 shadow-sm transition-all group cursor-pointer hover:border-rose-300 hover:ring-1 hover:ring-rose-200 hover:shadow-md hover:-translate-y-0.5"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-xs font-semibold text-gray-700 leading-snug group-hover:text-gray-900">{s.citation}</p>
+        <p className="text-xs font-semibold text-gray-700 leading-snug group-hover:text-gray-900 line-clamp-2">{s.citation}</p>
         <div className="flex items-center gap-1.5 shrink-0">
           <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
             s.source_type === 'legislation' ? 'bg-rose-50 text-rose-600' : 'bg-violet-50 text-violet-600'
@@ -25,9 +25,6 @@ export const SourceCard = memo(function SourceCard(
         </div>
       </div>
       <p className="text-xs text-gray-600 leading-relaxed mb-2 line-clamp-3">{s.content}</p>
-      <span className="hidden group-hover:flex items-center gap-1 text-[10px] font-medium text-rose-500 mb-1.5">
-        Click to view full source
-      </span>
       <div className="flex items-center gap-2">
         <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-1 bg-rose-400 rounded-full transition-all" style={{ width: `${Math.round(s.score * 100)}%` }} />
