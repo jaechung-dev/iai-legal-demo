@@ -26,8 +26,14 @@ resource "aws_iam_role" "github_actions" {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
+        # GitHub emits immutable numeric IDs in the OIDC sub for this account
+        # (repo:owner@<id>/repo@<id>:...). Accept both that form and the plain
+        # form so the match doesn't depend on the ID customization staying on.
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:jaechung-dev/probonoai:*"
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:jaechung-dev/probonoai:*",
+            "repo:jaechung-dev@210985902/probonoai@1307297934:*",
+          ]
         }
       }
     }]

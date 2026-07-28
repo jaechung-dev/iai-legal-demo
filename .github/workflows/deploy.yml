@@ -98,22 +98,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug OIDC claims (temporary)
-        run: |
-          echo "req token present: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}"
-          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
-          echo "token length: ${#TOKEN}"
-          python3 - "$TOKEN" <<'PY'
-          import sys, base64, json
-          p = sys.argv[1].split('.')[1]; p += '=' * (-len(p) % 4)
-          c = json.loads(base64.urlsafe_b64decode(p))
-          print("sub =", c.get("sub"))
-          print("aud =", c.get("aud"))
-          print("iss =", c.get("iss"))
-          print("repo =", c.get("repository"))
-          PY
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
