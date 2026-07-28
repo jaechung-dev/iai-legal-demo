@@ -151,10 +151,21 @@ async def update_case_files(
 
 
 @router.get("/case/{case_id}/timeline")
-def get_timeline(case_id: str) -> dict[str, Any]:
+def get_timeline(
+    case_id: str,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    user_id = require_auth(authorization)
     conn = psycopg2.connect(settings.DATABASE_URL)
     try:
         cur = conn.cursor()
+        # Ownership: case_events carries no user_id, so verify via case_intakes.
+        cur.execute("SELECT user_id FROM case_intakes WHERE id::text = %s", (case_id,))
+        owner = cur.fetchone()
+        if not owner:
+            raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+        if owner[0] != user_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
         cur.execute(
             "SELECT date, category, event_type, subject, summary, content, attachments "
             "FROM case_events WHERE case_id = %s ORDER BY date ASC",
@@ -163,8 +174,6 @@ def get_timeline(case_id: str) -> dict[str, Any]:
         rows = cur.fetchall()
     finally:
         conn.close()
-    if not rows:
-        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
     return {
         "case_id": case_id,
         "total": len(rows),

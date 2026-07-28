@@ -3,6 +3,7 @@ AI Lambda — search, ask, chat.
 Full LangChain + OpenAI stack. Cold start ~3s.
 Routes: /search  /ask  /chat
 """
+import os
 import json
 import asyncio
 import logging
@@ -111,6 +112,25 @@ def _get_user_from_header(authorization: str = None) -> str:
         return "anon"
 
 
+def _require_case_owner(case_id: str, user_id: str) -> None:
+    """Case timeline events are private and (unlike case_chunks) carry no
+    user_id column, so ownership is verified via case_intakes. Raises 401 for
+    anonymous callers, 403 if the case belongs to someone else, 404 if unknown."""
+    if user_id == "anon":
+        raise HTTPException(status_code=401, detail="Authentication required for case data")
+    conn = psycopg2.connect(settings.DATABASE_URL)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT user_id FROM case_intakes WHERE id::text = %s", (case_id,))
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Case not found")
+    if row[0] != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
 # ── Audit logging ──────────────────────────────────────────────────────────────
 
 
@@ -168,7 +188,11 @@ async def search(
     if req.source == "caselaw":
         retriever = CaselawRetriever(k=req.k)
     elif req.source == "case_events":
-        retriever = CaseEventRetriever(k=req.k, case_id=req.case_id)
+        # Case events are private; verify ownership when a case is specified.
+        cid = req.case_id or ""
+        if cid:
+            _require_case_owner(cid, user)
+        retriever = CaseEventRetriever(k=req.k, case_id=cid)
     else:
         retriever = LegislationRetriever(k=req.k, jurisdiction=req.jurisdiction)
 
@@ -211,7 +235,11 @@ async def ask(
     if req.source == "caselaw":
         retriever = CaselawRetriever(k=req.k)
     elif req.source == "case_events":
-        retriever = CaseEventRetriever(k=req.k, case_id=req.case_id)
+        # Case events are private; verify ownership when a case is specified.
+        cid = req.case_id or ""
+        if cid:
+            _require_case_owner(cid, user)
+        retriever = CaseEventRetriever(k=req.k, case_id=cid)
     else:
         retriever = LegislationRetriever(k=req.k, jurisdiction=req.jurisdiction)
 
@@ -234,7 +262,11 @@ async def chat(
     all_docs = leg.invoke(req.question) + cas.invoke(req.question)
     case_docs = []
     if req.case_id:
-        raw_case_docs = CaseChunkRetriever(case_id=req.case_id, k=req.k).invoke(req.question)
+        # Case documents are private. Anonymous callers can't query them, and the
+        # retriever is scoped by user_id so another user's case_id yields nothing.
+        if user == "anon":
+            raise HTTPException(status_code=401, detail="Authentication required to query case documents")
+        raw_case_docs = CaseChunkRetriever(case_id=req.case_id, user_id=user, k=req.k).invoke(req.question)
         case_docs = [d for d in raw_case_docs if d.metadata.get("score", 0) >= MIN_CASE_SCORE]
         all_docs = case_docs + all_docs
 

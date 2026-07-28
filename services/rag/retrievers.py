@@ -107,14 +107,23 @@ class CaselawRetriever(BaseRetriever):
 
 
 class CaseChunkRetriever(BaseRetriever):
-    """Semantic search over uploaded case document chunks for a specific case."""
+    """Semantic search over uploaded case document chunks for a specific case.
+
+    Scoped by ``user_id`` as well as ``case_id`` — a case_id belonging to another
+    user returns nothing, so an attacker-supplied case_id can never leak private
+    documents.
+    """
 
     k: int = Field(default=5)
     case_id: str = Field(default="")
+    user_id: str = Field(default="")
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
+        # Owner scoping is mandatory: never query case chunks without a user_id.
+        if not self.user_id:
+            return []
         vec = get_embedder().embed_query(query)
         vec_str = "[" + ",".join(str(x) for x in vec) + "]"
         conn = psycopg2.connect(DSN)
@@ -123,10 +132,10 @@ class CaseChunkRetriever(BaseRetriever):
             cur.execute("""
                 SELECT content, metadata, 1 - (embedding <=> %s::vector) AS score
                 FROM case_chunks
-                WHERE case_id = %s AND embedding IS NOT NULL
+                WHERE case_id = %s AND user_id = %s AND embedding IS NOT NULL
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
-            """, (vec_str, self.case_id, vec_str, self.k))
+            """, (vec_str, self.case_id, self.user_id, vec_str, self.k))
             rows = cur.fetchall()
         finally:
             conn.close()
