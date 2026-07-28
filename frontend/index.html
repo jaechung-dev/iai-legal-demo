@@ -18,7 +18,13 @@
           var p = location.pathname, s = location.search;
           var t = localStorage.getItem('iai_token'), authed = false;
           if (t) { try { authed = JSON.parse(atob(t.split('.')[1])).exp * 1000 > Date.now(); } catch (e) {} }
-          if (authed && p === '/' && s.indexOf('preview') === -1) { location.replace('/chat'); return; }
+          if (authed && p === '/' && s.indexOf('preview') === -1) {
+            // Hide the pre-rendered landing BEFORE redirecting so a logged-in
+            // user never sees it flash on the way to the app.
+            document.documentElement.className += ' booting';
+            location.replace('/chat');
+            return;
+          }
           if (p !== '/') {
             document.documentElement.className += ' booting';
             setTimeout(function () { document.documentElement.classList.remove('booting'); }, 4000);
