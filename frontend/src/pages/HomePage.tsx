@@ -25,23 +25,22 @@ export default function HomePage() {
   const [searchParams] = useSearchParams()
   const preview = searchParams.get('preview') !== null
   const [showModal, setShowModal] = useState(false)
-  const [ready, setReady] = useState(false)
 
-  // Logged-in users normally get bounced to the app. `?preview=1` (the nav
-  // logo links here) lets them revisit this landing page instead of it being
-  // an orphan they can never see again.
+  // Logged-in users are bounced to the app — the boot gate in index.html does
+  // this before React loads; this is the in-app SPA-navigation fallback.
+  // `?preview=1` (nav logo) lets a signed-in user revisit the landing.
+  // We do NOT gate the render on a `ready` flag: the landing must render on the
+  // first client render so it hydrates cleanly against the pre-rendered HTML
+  // (a null first render caused a mismatch → the landing rendered twice).
   useEffect(() => {
     if (window.location.hostname.startsWith('stage.')) {
       navigate('/chat', { replace: true }); return
     }
-    if (user && !preview) { navigate('/chat', { replace: true }); return }
-    setReady(true)
+    if (user && !preview) navigate('/chat', { replace: true })
   }, [user, preview, navigate])
 
   // CTAs: enter the app if already signed in, else open the login modal.
   const cta = () => (user ? navigate('/chat') : setShowModal(true))
-
-  if (!ready) return null
 
   return (
     <>
