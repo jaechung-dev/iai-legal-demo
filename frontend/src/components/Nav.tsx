@@ -62,7 +62,7 @@ export default function Nav() {
             <Link key={to} to={to}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                 isActive(to)
-                  ? 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20'
+                  ? 'bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/20'
                   : 'text-zinc-400 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -104,7 +104,7 @@ export default function Nav() {
             <Link key={to} to={to}
               className={`p-2 rounded-md transition-all ${
                 isActive(to)
-                  ? 'bg-rose-500/10 text-rose-400'
+                  ? 'bg-rose-500/10 text-rose-300'
                   : 'text-zinc-500 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -147,7 +147,7 @@ export default function Nav() {
             <Link key={to} to={to} onClick={() => setMobileOpen(false)}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-all ${
                 isActive(to)
-                  ? 'bg-rose-500/10 text-rose-400'
+                  ? 'bg-rose-500/10 text-rose-300'
                   : 'text-zinc-400 hover:text-white hover:bg-white/5'
               }`}
             >

@@ -40,8 +40,8 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all">
+        <button onClick={onClose} aria-label="Close"
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-all">
           <X className="w-4 h-4" />
         </button>
 
@@ -75,7 +75,7 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
 
           <div className="relative flex items-center gap-3">
             <div className="flex-1 border-t border-gray-200" />
-            <span className="text-xs text-gray-400 font-medium">or with username</span>
+            <span className="text-xs text-gray-500 font-medium">or with username</span>
             <div className="flex-1 border-t border-gray-200" />
           </div>
 
@@ -98,7 +98,7 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
 
           <div className="relative flex items-center gap-3">
             <div className="flex-1 border-t border-gray-200" />
-            <span className="text-xs text-gray-400 font-medium">Guest accounts</span>
+            <span className="text-xs text-gray-500 font-medium">Guest accounts</span>
             <div className="flex-1 border-t border-gray-200" />
           </div>
 
@@ -106,7 +106,7 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
             className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-rose-300 hover:bg-rose-50/30 transition-all group shadow-sm">
             <div className="text-left">
               <p className="text-sm font-medium text-gray-800">Guest</p>
-              <p className="text-xs text-gray-400 mt-0.5">Guest access</p>
+              <p className="text-xs text-gray-500 mt-0.5">Guest access</p>
             </div>
             <span className="text-xs text-rose-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
               Autofill <ArrowRight className="w-3 h-3" />

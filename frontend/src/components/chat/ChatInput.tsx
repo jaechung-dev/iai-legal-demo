@@ -22,9 +22,10 @@ export default function ChatInput({ value, onChange, onSend, disabled }: Props) 
         <button
           onClick={onSend}
           disabled={disabled || !value.trim()}
+          aria-label="Send message"
           className="rounded-xl w-11 h-11 bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center shrink-0 transition-all shadow-sm"
         >
-          <Send className="w-4 h-4" />
+          <Send className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </div>

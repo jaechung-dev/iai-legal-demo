@@ -243,7 +243,7 @@ export default function ChatPage() {
                   <MessageSquare className="w-7 h-7 text-rose-400" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900 mb-2">Ask about NSW law</h2>
-                <p className="text-sm text-gray-400 leading-relaxed mb-8">
+                <p className="text-sm text-gray-500 leading-relaxed mb-8">
                   Plain English answers backed by real legislation and caselaw.<br />A starting point — not legal advice.
                 </p>
                 <div className="w-full space-y-2 text-left">

@@ -108,7 +108,7 @@ export default function HomePage() {
               <div className="h-px flex-1 bg-amber-700/35" />
             </div>
 
-            <p className="text-sm text-zinc-500 max-w-md mb-7 leading-relaxed">
+            <p className="text-sm text-zinc-400 max-w-md mb-7 leading-relaxed">
               Search NSW legislation, ask questions, and get AI-powered analysis grounded in real court decisions — at no cost.
             </p>
 
@@ -157,7 +157,7 @@ export default function HomePage() {
 
             {/* Sample questions */}
             <div className="max-w-lg">
-              <p className="text-xs text-zinc-600 uppercase tracking-widest font-medium mb-3">Example questions</p>
+              <p className="text-xs text-zinc-400 uppercase tracking-widest font-medium mb-3">Example questions</p>
               <div className="space-y-2">
                 {SAMPLE_QUESTIONS.map(q => (
                   <button
@@ -165,9 +165,9 @@ export default function HomePage() {
                     onClick={cta}
                     className="w-full text-left flex items-start gap-3 bg-zinc-900/50 hover:bg-zinc-800/70 border border-zinc-800 hover:border-zinc-700 rounded-xl px-4 py-3 transition-all group"
                   >
-                    <Search className="w-3.5 h-3.5 text-zinc-600 group-hover:text-rose-400 mt-0.5 shrink-0 transition-colors" />
+                    <Search className="w-3.5 h-3.5 text-zinc-400 group-hover:text-rose-400 mt-0.5 shrink-0 transition-colors" />
                     <span className="text-sm text-zinc-400 group-hover:text-zinc-200 transition-colors leading-snug">{q}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-rose-400 ml-auto shrink-0 mt-0.5 transition-colors" />
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-400 group-hover:text-rose-400 ml-auto shrink-0 mt-0.5 transition-colors" />
                   </button>
                 ))}
               </div>
@@ -181,7 +181,10 @@ export default function HomePage() {
             {/* Bottom vignette */}
             <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none z-10" />
 
-            <div className="absolute inset-0" style={{
+            <div
+              role="img"
+              aria-label="A statue of Lady Justice in flowing robes, holding a set of evenly balanced scales aloft — the classical emblem of law, fairness, and impartial judgment"
+              className="absolute inset-0" style={{
               backgroundImage: 'url(/justiti.png)',
               backgroundSize: 'auto 94%',
               backgroundPosition: '38% bottom',
@@ -217,14 +220,14 @@ export default function HomePage() {
               </div>
               <div>
                 <p className="font-serif font-semibold text-white text-sm">{APP_NAME}</p>
-                <p className="text-xs text-zinc-600 mt-0.5">Not legal advice · For informational purposes only</p>
+                <p className="text-xs text-zinc-400 mt-0.5">Not legal advice · For informational purposes only</p>
               </div>
             </div>
             <div className="flex items-center gap-6">
-              <button onClick={cta} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Search</button>
-              <button onClick={cta} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Ask a question</button>
-              <button onClick={cta} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Connect AI</button>
-              <span className="text-xs text-zinc-700">{APP_DOMAIN}</span>
+              <button onClick={cta} className="text-xs text-zinc-400 hover:text-zinc-300 transition-colors">Search</button>
+              <button onClick={cta} className="text-xs text-zinc-400 hover:text-zinc-300 transition-colors">Ask a question</button>
+              <button onClick={cta} className="text-xs text-zinc-400 hover:text-zinc-300 transition-colors">Connect AI</button>
+              <span className="text-xs text-zinc-400">{APP_DOMAIN}</span>
             </div>
           </div>
         </footer>

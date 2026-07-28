@@ -43,7 +43,7 @@ describe('LoginModal', () => {
 
   test('close button calls onClose', () => {
     renderModal(onClose)
-    const closeBtn = screen.getByRole('button', { name: '' })
+    const closeBtn = screen.getByRole('button', { name: /close/i })
     fireEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
   })

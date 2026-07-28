@@ -55,7 +55,7 @@ export default function ConversationSidebar({
 
         <div className="flex-1 overflow-y-auto py-2">
           {conversations.length === 0 ? (
-            <p className="text-xs text-zinc-600 text-center px-4 py-8 leading-relaxed">Your conversations will appear here</p>
+            <p className="text-xs text-zinc-400 text-center px-4 py-8 leading-relaxed">Your conversations will appear here</p>
           ) : (
             <ul>
               {conversations.map(conv => (

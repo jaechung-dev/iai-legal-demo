@@ -39,7 +39,7 @@ export default function SourcesPanel({ show, onHide, sources, vlistRef, getItemS
           <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3">
             <BookOpen className="w-5 h-5 text-gray-300" />
           </div>
-          <p className="text-xs text-gray-400 leading-relaxed">Retrieved legislation and caselaw will appear here</p>
+          <p className="text-xs text-gray-500 leading-relaxed">Retrieved legislation and caselaw will appear here</p>
         </div>
       ) : (
         <div className="flex-1 min-h-0">
