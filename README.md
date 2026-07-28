@@ -61,7 +61,22 @@ Request volume is bursty and demo-scale. Lambda costs zero at rest, Mangum means
 
 ### Why split the Lambda into API + AI?
 
-The AI Lambda carries LangChain + OpenAI SDK + numpy/scipy (~50MB zip, ~3s cold start). The API Lambda is pure FastAPI with no ML deps (~10MB, ~1s cold start). Auth calls (login, refresh, MCP token) should never wait 3s for a cold start. Splitting means auth stays fast even when the AI Lambda is cold.
+The AI Lambda carries LangChain + the OpenAI SDK; the API Lambda is pure FastAPI with no ML deps. Auth calls (login, refresh, MCP token) should never wait behind the AI Lambda's heavier init, so splitting keeps auth lean and independent. Real package sizes after the de-bloat below: **API 13.6 MB, AI 29.3 MB**.
+
+### Lambda package size & cold start
+
+The four zips were shipping weight they never needed. `boto3`/`botocore` (~21 MB) are already in the Lambda Python runtime, and `uvicorn[standard]`'s async extras (uvloop/httptools/watchfiles, ~20 MB) are local-dev only — under Mangum the app never touches them. Stripping both (`slim()` in `build_lambda.sh` + plain `uvicorn`):
+
+| Lambda | Before | After |
+|---|---|---|
+| API    | 41.6 MB | **13.6 MB** |
+| AI     | 67.5 MB | **29.3 MB** |
+| MCP    | 67.5 MB | **29.3 MB** |
+| Ingest | 62.6 MB | **39.6 MB** |
+
+**What size bought — and didn't.** Faster deploys and a genuinely lean auth Lambda. But cold start barely moved (API ~3.0s → ~2.9s): cold start here is **import-bound, not size-bound** — the time goes into importing `cryptography`/`pydantic`/`psycopg2`/`fastapi`, not downloading the zip. The real levers are more memory (more CPU → faster imports) and Lambda **SnapStart**.
+
+**On SnapStart — considered, deliberately deferred.** SnapStart snapshots the post-init environment and restores it in ~200–500 ms, which would erase most of this cold start since the imports are already done (GA for Python 3.12+). It's not adopted here because at this scale it's overkill and carries real caveats worth knowing: it needs a published-version + alias deploy model (API Gateway points at the alias), snapshot caching/restore isn't free for Python, and anything unique-per-instance must be re-initialized in an `after_restore` hook. Notably the OTP generator would have to move off `random.randint` first — a shared, snapshotted RNG state would make codes predictable across restored instances. Being able to reason about that tradeoff matters more than flipping the switch; SnapStart earns its complexity once cold start is a measured UX problem, not before.
 
 ### Why presigned S3 PUT for document uploads?
 
