@@ -61,9 +61,35 @@ def format_docs(docs: list[Document]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", flags=re.DOTALL)
+_THINK_OPEN = "<think>"
+
+
 def strip_think(text: str) -> str:
     """Remove <think>…</think> blocks emitted by reasoning models."""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    return _THINK_BLOCK_RE.sub("", text).strip()
+
+
+def _strip_think_blocks(text: str) -> str:
+    """Remove only *complete* <think>…</think> blocks, without trimming
+    whitespace — keeps the result prefix-stable for incremental streaming."""
+    return _THINK_BLOCK_RE.sub("", text)
+
+
+def _safe_visible(buffer: str) -> str:
+    """The portion of a partial stream buffer that is safe to reveal to an
+    append-only client. Complete <think> blocks are removed; an unclosed
+    <think> block (and any partially-written opening tag at the very end) is
+    held back so reasoning text and half-written tags are never streamed and
+    then need retracting."""
+    text = _strip_think_blocks(buffer)
+    open_idx = text.rfind(_THINK_OPEN)
+    if open_idx != -1:                      # unclosed <think> — hold from here
+        return text[:open_idx]
+    for i in range(len(_THINK_OPEN) - 1, 0, -1):   # hold a partial "<think>" tag
+        if text.endswith(_THINK_OPEN[:i]):
+            return text[:-i]
+    return text
 
 
 # ── /ask streaming generators ─────────────────────────────────────────────────
@@ -87,13 +113,22 @@ async def stream_single(
         | get_llm()
         | StrOutputParser()
     )
-    full_text = ""
+    buffer = ""
+    emitted = 0
     chunks = 0
     t0 = time.time()
     async for chunk in chain.astream(question):
-        full_text += chunk
+        if not chunk:
+            continue
+        buffer += chunk
         chunks += 1
-        yield f"data: {json.dumps({'text': chunk})}\n\n"
+        safe = _safe_visible(buffer)
+        if len(safe) > emitted:
+            yield f"data: {json.dumps({'text': safe[emitted:]})}\n\n"
+            emitted = len(safe)
+    final = _strip_think_blocks(buffer)          # flush any held-back trailing text
+    if len(final) > emitted:
+        yield f"data: {json.dumps({'text': final[emitted:]})}\n\n"
     elapsed_ms = round((time.time() - t0) * 1000)
     logger.info(
         "ask question=%r source=%s k=%d user=%s elapsed_ms=%d chunks=%d",
@@ -104,7 +139,7 @@ async def stream_single(
         endpoint="/ask",
         user_id=user,
         input_data={"question": question, "source": source, "k": k},
-        output_data={"answer": strip_think(full_text)},
+        output_data={"answer": strip_think(buffer)},
         elapsed_ms=elapsed_ms,
     ))
 
@@ -127,14 +162,21 @@ async def stream_both(
     chain = PROMPT | get_llm() | StrOutputParser()
 
     buffer = ""
+    emitted = 0
     chunks = 0
     t0 = time.time()
     async for chunk in chain.astream({"context": context, "question": question}):
+        if not chunk:
+            continue
         buffer += chunk
         chunks += 1
-        clean = strip_think(buffer)
-        if clean:
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        safe = _safe_visible(buffer)
+        if len(safe) > emitted:
+            yield f"data: {json.dumps({'text': safe[emitted:]})}\n\n"
+            emitted = len(safe)
+    final = _strip_think_blocks(buffer)          # flush any held-back trailing text
+    if len(final) > emitted:
+        yield f"data: {json.dumps({'text': final[emitted:]})}\n\n"
     elapsed_ms = round((time.time() - t0) * 1000)
     logger.info(
         "ask question=%r source=%s k=%d user=%s elapsed_ms=%d chunks=%d",
@@ -166,17 +208,22 @@ async def stream_chat(
     """
     yield f"data: {json.dumps({'type': 'sources', 'docs': sources})}\n\n"
     buffer = ""
+    emitted = 0
     chunks = 0
     t0 = time.time()
     async for chunk in get_llm().astream(lc_messages):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
+        if not token:
+            continue
         buffer += token
         chunks += 1
-        before = strip_think(buffer[:-len(token)] if len(token) <= len(buffer) else "")
-        after = strip_think(buffer)
-        new_text = after[len(before):]
-        if new_text:
-            yield f"data: {json.dumps({'type': 'token', 'text': new_text})}\n\n"
+        safe = _safe_visible(buffer)
+        if len(safe) > emitted:
+            yield f"data: {json.dumps({'type': 'token', 'text': safe[emitted:]})}\n\n"
+            emitted = len(safe)
+    final = _strip_think_blocks(buffer)          # flush any held-back trailing text
+    if len(final) > emitted:
+        yield f"data: {json.dumps({'type': 'token', 'text': final[emitted:]})}\n\n"
     elapsed_ms = round((time.time() - t0) * 1000)
     logger.info(
         "chat question=%r messages=%d case_id=%s user=%s elapsed_ms=%d chunks=%d",
