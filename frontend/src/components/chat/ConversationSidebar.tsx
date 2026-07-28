@@ -32,7 +32,7 @@ export default function ConversationSidebar({
         ${open ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0 fixed lg:relative z-30 lg:z-auto
         top-0 left-0 h-full lg:h-auto
-        w-[260px] shrink-0 flex flex-col
+        w-[240px] shrink-0 flex flex-col
         bg-zinc-950 border-r border-zinc-800
         transition-transform duration-200 ease-in-out
       `}>
@@ -46,7 +46,7 @@ export default function ConversationSidebar({
         <div className="px-3 py-3 border-b border-zinc-800">
           <button
             onClick={() => { onNew(); onClose() }}
-            className="w-full flex items-center gap-2 px-3 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2.5 bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4 shrink-0" />
             New chat

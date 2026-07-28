@@ -53,6 +53,14 @@ export default function ChatPage() {
       }).catch(() => {})
   }, [token])
 
+  // The case banner is a transient "now reading your case" confirmation —
+  // auto-dismiss it after a few seconds so it doesn't linger forever.
+  useEffect(() => {
+    if (!showCaseBanner) return
+    const t = setTimeout(() => setShowCaseBanner(false), 5000)
+    return () => clearTimeout(t)
+  }, [showCaseBanner])
+
   useEffect(() => { if (token) fetchConversations() }, [token])
 
   async function fetchConversations() {
@@ -185,14 +193,14 @@ export default function ChatPage() {
       <Nav />
 
       {caseId && showCaseBanner && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-b border-emerald-100 text-xs text-emerald-800">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+        <div className="flex items-center gap-2 px-4 py-2 bg-rose-50 border-b border-rose-100 text-xs text-rose-800">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
           <span className="font-medium">
             Reading your case documents
             {caseMatter?.matterType ? ` · ${caseMatter.matterType}` : ''}
             {caseMatter?.subType ? ` · ${caseMatter.subType}` : ''}
           </span>
-          <button onClick={() => setShowCaseBanner(false)} className="ml-auto text-emerald-500 hover:text-emerald-700">✕</button>
+          <button onClick={() => setShowCaseBanner(false)} className="ml-auto text-rose-500 hover:text-rose-700">✕</button>
         </div>
       )}
 
@@ -221,7 +229,7 @@ export default function ChatPage() {
             )}
             {sources.length > 0 && (
               <button onClick={() => setShowSources(!showSources)}
-                className="flex items-center gap-2 text-xs font-medium text-emerald-700 ml-auto">
+                className="flex items-center gap-2 text-xs font-medium text-rose-700 ml-auto">
                 <SidebarOpen className="w-3.5 h-3.5" />
                 {showSources ? 'Hide' : 'Show'} {sources.length} sources
               </button>
@@ -232,7 +240,7 @@ export default function ChatPage() {
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-md mx-auto text-center">
                 <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mb-5 shadow-lg">
-                  <MessageSquare className="w-7 h-7 text-emerald-400" />
+                  <MessageSquare className="w-7 h-7 text-rose-400" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900 mb-2">Ask about NSW law</h2>
                 <p className="text-sm text-gray-400 leading-relaxed mb-8">
@@ -241,9 +249,9 @@ export default function ChatPage() {
                 <div className="w-full space-y-2 text-left">
                   {SUGGESTED.map(q => (
                     <button key={q} onClick={() => sendMessage(q)}
-                      className="w-full text-sm bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-gray-600 hover:bg-gray-50 hover:border-emerald-200 hover:text-gray-900 transition-all text-left shadow-sm group flex items-center justify-between">
+                      className="w-full text-sm bg-white border border-gray-200 rounded-xl px-4 py-3.5 text-gray-600 hover:bg-gray-50 hover:border-rose-200 hover:text-gray-900 transition-all text-left shadow-sm group flex items-center justify-between">
                       <span>{q}</span>
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-emerald-400 transition-colors shrink-0" />
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-rose-400 transition-colors shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -254,7 +262,7 @@ export default function ChatPage() {
                   <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {m.role === 'assistant' && (
                       <div className="w-8 h-8 bg-gray-900 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                        <MessageSquare className="w-4 h-4 text-emerald-400" />
+                        <MessageSquare className="w-4 h-4 text-rose-400" />
                       </div>
                     )}
                     <div className={`max-w-[82%] rounded-2xl px-4 py-3.5 text-sm leading-relaxed shadow-sm ${
