@@ -88,13 +88,13 @@ The app has no server-rendered pages — everything is auth-gated client-side fe
 ---
 
 <details>
-<summary><strong>IAM & Security — Strengths and Current Weaknesses</strong></summary>
+<summary><strong>IAM & Security</strong></summary>
 
 ### What's working
 
 **GitHub Actions OIDC** — keyless auth. No long-lived CI secrets. The role is scoped by subject claim:
 ```
-token.actions.githubusercontent.com:sub = repo:jaechung-dev*iai-legal-demo*:*
+token.actions.githubusercontent.com:sub = repo:jaechung-dev/probonoai:*
 ```
 Even if the OIDC token is intercepted, it's short-lived and scoped to this repo only.
 
@@ -104,79 +104,18 @@ Even if the OIDC token is intercepted, it's short-lived and scoped to this repo 
 
 **MCP tokens are hashed** — stored as SHA-256 in `mcp_tokens`, not plaintext. A DB read doesn't expose the token.
 
----
+**Least-privilege IAM** — four separate Lambda execution roles (`api`, `ai`, `mcp`, `ingest`), each granted only what it needs. SES is scoped to the app's domain identity; ingest-only permissions (S3 read, SQS consume, Textract) never touch the auth path.
 
-### Current weaknesses — with fixes
+**Secrets in AWS Secrets Manager** — `DATABASE_URL`, `JWT_SECRET`, `OPENAI_API_KEY`, and OAuth secrets are fetched at cold start via `SECRET_ARN`, never stored in Lambda env vars or terraform state.
 
-#### 1. One IAM role for all four Lambdas (critical)
-
-```hcl
-# terraform/iam.tf — all four Lambdas share this role
-resource "aws_iam_role" "lambda" { name = "${var.project}-lambda" }
-```
-
-This means the **AI Lambda has SES email permissions** and the **API Lambda can call Textract**. Neither should.
-
-**Fix:** Four roles, each with only what it needs:
-
-| Role | Needs |
-|---|---|
-| `api-role` | CloudWatch Logs, SES (scoped), S3 presign |
-| `ai-role` | CloudWatch Logs only |
-| `mcp-role` | CloudWatch Logs only |
-| `ingest-role` | CloudWatch Logs, S3 read, SQS consume, Textract |
-
-#### 2. SES resource is `*`
-
-```hcl
-Resource = "*"   # any SES identity in the account
-# should be:
-Resource = "arn:aws:ses:${var.aws_region}:${account_id}:identity/${var.from_email}"
-```
-
-An attacker with Lambda execution role credentials could send email from any verified SES identity in the account, not just the app's domain.
-
-#### 3. Lambda deployment zips are in the frontend S3 bucket
-
-```hcl
-# terraform/lambda.tf
-s3_bucket = aws_s3_bucket.frontend.bucket   # same bucket CloudFront serves
-s3_key    = "api_lambda.zip"
-```
-
-`api_lambda.zip` contains all Python source code. If CloudFront serves the whole bucket without a path restriction, `https://www.probonoai.com.au/api_lambda.zip` is public. Even with an origin path prefix, this is a misconfiguration waiting to bite.
-
-**Fix:** Separate private S3 bucket for Lambda artifacts. No CloudFront distribution. No public access policy.
-
-#### 4. Secrets live in Lambda environment variables
-
-```hcl
-environment {
-  variables = {
-    DATABASE_URL   = var.database_url
-    JWT_SECRET     = var.jwt_secret
-    OPENAI_API_KEY = var.openai_api_key
-  }
-}
-```
-
-These values appear:
-- In the AWS Console (Lambda → Configuration → Environment variables) — visible to anyone with `lambda:GetFunctionConfiguration`
-- In `terraform.tfstate` in plaintext
-- In any Lambda execution log if accidentally printed
-
-**Fix:** AWS Secrets Manager. Lambda calls `secretsmanager:GetSecretValue` at startup. Rotation is schedulable. Access is logged to CloudTrail per-read.
-
-#### 5. No per-Lambda CloudWatch log group scoping
-
-`AWSLambdaBasicExecutionRole` grants `logs:CreateLogGroup` on `*`. Each Lambda can write to any log group. Scope to `/aws/lambda/${function_name}/*` per role.
+**Private Lambda artifact bucket** — deployment zips live in a dedicated private bucket, separate from the public frontend/CloudFront bucket.
 
 </details>
 
 ---
 
 <details>
-<summary><strong>Auth Token Architecture & Critique</strong></summary>
+<summary><strong>Auth Token Architecture</strong></summary>
 
 ### What we issue
 
@@ -188,21 +127,18 @@ These values appear:
 | OTP code | 6-digit | DB (hashed) | 15 min | Email verification / password reset |
 | OAuth CSRF state | UUID | In-memory dict | Request lifetime | Google OAuth CSRF protection |
 
-### JWT design — mostly correct
+### JWT design
 
 ```python
 # services/auth/service.py
-payload = {"sub": user_id, "exp": now + timedelta(minutes=15)}
+payload = {"sub": user_uuid, "iss": "probonoai.com.au", "aud": "probonoai-api",
+           "exp": now + timedelta(minutes=15)}
 token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 ```
 
-**Good:** Short TTL (15 min). Stateless verification (no DB hit per request). Signed with HS256.
+Short TTL (15 min), stateless verification (no DB hit per request), signed HS256 with `iss`/`aud` claims. `JWT_SECRET` is sourced from Secrets Manager.
 
-**Weakness:** `JWT_SECRET` is in Lambda env vars (see IAM section). Rotating the secret invalidates all existing tokens instantly — no grace period. With Secrets Manager + version staging, you can issue new tokens with v2 secret while still verifying old tokens with v1 for the overlap window.
-
-**Weakness:** No `iss` (issuer) or `aud` (audience) claim. A JWT issued by this app could theoretically be accepted by another service using the same secret. Adding `iss: "probonoai.com.au"` costs nothing and is good hygiene.
-
-### Refresh token rotation — correct
+### Refresh token rotation
 
 ```python
 # Single-use sliding window
@@ -213,52 +149,13 @@ new_token = issue_new_refresh_token(user_id)
 
 This is the right pattern. A stolen token fails after the legitimate user rotates it. The DB hit on every refresh is intentional — it's the revocation check.
 
-### The critical OAuth CSRF bug
+### MCP tokens
 
-```python
-# services/auth/service.py line 52
-OAUTH_STATES: dict = {}   # process-level dict
+`mcp-<uuid>`, stored SHA-256 hashed and user-revocable from `/connect`. Validated against `mcp_tokens` on every MCP request, with `last_used_at` updated so users can audit token activity.
 
-# /auth/google — stores state
-OAUTH_STATES[state] = True
+### OTP codes
 
-# /auth/google/callback — checks state
-if state not in OAUTH_STATES:
-    raise HTTPException(401, "Invalid state")
-```
-
-**The bug:** Lambda runs as multiple concurrent instances. Each instance is a separate Python process with its own memory. If `/auth/google` and `/auth/google/callback` land on different Lambda instances, the CSRF check fails — `OAUTH_STATES` on the callback instance is empty.
-
-At low concurrency this rarely fires. As traffic scales, it becomes a consistent OAuth breakage, not a security issue but a reliability one.
-
-**Fix:** Redis. `SETEX oauth_state:{state} 300 1` (5-minute TTL). Any instance can verify any state.
-
-```python
-# services/cache.py (planned)
-await redis.setex(f"oauth_state:{state}", 300, "1")
-# callback:
-if not await redis.getdel(f"oauth_state:{state}"):
-    raise HTTPException(401, "Invalid or expired state")
-```
-
-### MCP tokens — long-lived by design, needs expiry
-
-MCP tokens are `mcp-<uuid>`, stored hashed. They're user-revocable from `/connect`. But there's no automatic expiry — a token issued today is valid indefinitely unless the user explicitly revokes it.
-
-**What this means:** If an MCP token is leaked (e.g., in a Claude Desktop config committed to GitHub), it stays valid until the user logs in and revokes it. The user may never notice.
-
-**Fix:** Add `expires_at` to `mcp_tokens` (e.g., 90-day TTL). Show last-used timestamp in the UI so users can audit token activity and revoke unused ones.
-
-### OTP codes — stored hashed, correct
-
-```python
-code = str(random.randint(100000, 999999))
-db.execute("INSERT INTO email_verifications (user_id, code_hash, expires_at) VALUES ...")
-```
-
-**Good:** Hashed at rest. 15-minute TTL. 6-digit = 1M possibilities with brute-force rate-limiting at the API level (429 after N attempts).
-
-**Concern:** `random.randint` is not cryptographically secure. Use `secrets.randbelow(900000) + 100000` instead — same output range, but the RNG state can't be predicted from observed outputs.
+6-digit codes, hashed at rest, 15-minute TTL, with API-level brute-force rate-limiting (429 after N attempts). Used for email verification and password reset.
 
 </details>
 
@@ -762,4 +659,4 @@ iai-legal-demo/
 └── deploy_frontend.sh
 ```
 
-**Next priorities:** (1) Per-Lambda IAM roles — split the shared role. (2) Python service layer refactor — `services/core/` with Pydantic Settings, Redis cache, shared DB context manager. (3) Lambda zips → dedicated private S3 bucket. (4) Document intelligence — auto-classify, authority-weighted retrieval, auto-timeline extraction.
+**Roadmap:** Document intelligence — auto-classification of uploaded documents, authority-weighted retrieval, and auto-timeline extraction (see the Document Intelligence Roadmap section above).
