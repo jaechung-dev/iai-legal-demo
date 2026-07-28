@@ -52,7 +52,7 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-sm space-y-7">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-zinc-950 rounded-lg flex items-center justify-center">
-            <Scale className="w-4 h-4 text-emerald-400" />
+            <Scale className="w-4 h-4 text-rose-400" />
           </div>
           <span className="font-bold text-gray-900">{APP_NAME}</span>
         </div>
@@ -66,7 +66,7 @@ export default function ResetPasswordPage() {
             <div className="relative">
               <input
                 type={showPw ? 'text' : 'password'}
-                className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+                className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
                 placeholder="Min. 8 characters"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -85,12 +85,12 @@ export default function ResetPasswordPage() {
                   <div className={`h-1 rounded-full transition-all ${
                     strength === 'weak' ? 'w-1/4 bg-rose-400' :
                     strength === 'fair' ? 'w-2/4 bg-amber-400' :
-                    strength === 'good' ? 'w-3/4 bg-emerald-400' : 'w-full bg-emerald-500'
+                    strength === 'good' ? 'w-3/4 bg-rose-400' : 'w-full bg-rose-500'
                   }`} />
                 </div>
                 <p className={`text-xs capitalize ${
                   strength === 'weak' ? 'text-rose-500' :
-                  strength === 'fair' ? 'text-amber-500' : 'text-emerald-600'
+                  strength === 'fair' ? 'text-amber-500' : 'text-rose-600'
                 }`}>{strength} password</p>
               </div>
             )}
@@ -99,7 +99,7 @@ export default function ResetPasswordPage() {
             <label className="text-sm font-medium text-gray-700">Confirm password</label>
             <input
               type="password"
-              className={`w-full border bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm ${
+              className={`w-full border bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm ${
                 confirm && confirm !== password ? 'border-rose-300' : 'border-gray-200'
               }`}
               placeholder="Repeat your password"

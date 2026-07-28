@@ -110,14 +110,14 @@ export default function RegisterPage() {
     : password.length < 12 ? 'fair'
     : /[A-Z]/.test(password) && /[0-9]/.test(password) ? 'strong' : 'good'
 
-  const strengthColor = { weak: 'bg-rose-400', fair: 'bg-amber-400', good: 'bg-emerald-400', strong: 'bg-emerald-500' }
+  const strengthColor = { weak: 'bg-rose-400', fair: 'bg-amber-400', good: 'bg-rose-400', strong: 'bg-rose-500' }
   const strengthWidth = { weak: 'w-1/4', fair: 'w-2/4', good: 'w-3/4', strong: 'w-full' }
 
   if (verifyEmail) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
       <div className="w-full max-w-sm text-center space-y-6">
-        <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto">
-          <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-16 h-16 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto">
+          <svg className="w-8 h-8 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         </div>
@@ -133,7 +133,7 @@ export default function RegisterPage() {
                 type="text" inputMode="numeric" maxLength={1} value={digit}
                 onChange={e => handleOtpChange(i, e.target.value)}
                 onKeyDown={e => handleOtpKeyDown(i, e)}
-                className="w-12 h-14 text-center text-xl font-bold border border-gray-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all shadow-sm"
+                className="w-12 h-14 text-center text-xl font-bold border border-gray-200 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all shadow-sm"
                 aria-label={`Digit ${i + 1}`}
               />
             ))}
@@ -147,7 +147,7 @@ export default function RegisterPage() {
         <p className="text-xs text-gray-400">
           Didn't receive it?{' '}
           {cooldown > 0 ? <span className="text-gray-400">Resend in {cooldown}s</span>
-            : <button onClick={handleResend} className="text-emerald-600 hover:underline">Resend code</button>}
+            : <button onClick={handleResend} className="text-rose-600 hover:underline">Resend code</button>}
         </p>
       </div>
     </div>
@@ -158,22 +158,22 @@ export default function RegisterPage() {
       <div className="hidden lg:flex lg:w-[45%] bg-zinc-950 flex-col justify-between p-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(52,211,153,0.08)_0%,_transparent_60%)]" />
         <Link to="/" className="relative flex items-center gap-2.5 w-fit">
-          <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+          <div className="w-9 h-9 bg-rose-500 rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/30">
             <Scale className="w-5 h-5 text-white" />
           </div>
           <span className="font-bold text-white text-base tracking-tight">{APP_NAME}</span>
         </Link>
         <div className="relative space-y-10">
           <div>
-            <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">Free · NSW · AI-powered</p>
+            <p className="text-xs font-semibold text-rose-400 uppercase tracking-widest mb-3">Free · NSW · AI-powered</p>
             <h2 className="text-4xl font-bold text-white leading-tight">Free access to<br />NSW legal help</h2>
             <p className="text-zinc-400 mt-4 leading-relaxed text-sm max-w-sm">Create your free account to access plain English legal answers, case timelines, and AI-powered legal research.</p>
           </div>
           <div className="space-y-3">
             {FEATURES.map(f => (
               <div key={f} className="flex items-center gap-3 text-sm text-zinc-400">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                  <Check className="w-3 h-3 text-emerald-400" />
+                <div className="w-5 h-5 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                  <Check className="w-3 h-3 text-rose-400" />
                 </div>
                 {f}
               </div>
@@ -187,7 +187,7 @@ export default function RegisterPage() {
         <div className="w-full max-w-sm space-y-6 py-8">
           <Link to="/" className="lg:hidden flex items-center gap-2.5 w-fit">
             <div className="w-8 h-8 bg-zinc-950 rounded-lg flex items-center justify-center">
-              <Scale className="w-4 h-4 text-emerald-400" />
+              <Scale className="w-4 h-4 text-rose-400" />
             </div>
             <span className="font-bold text-gray-900">{APP_NAME}</span>
           </Link>
@@ -207,19 +207,19 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700">Full name</label>
-              <input className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+              <input className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
                 placeholder="Jane Smith" value={name} onChange={e => setName(e.target.value)} autoComplete="name" required />
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700">Email address</label>
-              <input type="email" className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+              <input type="email" className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
                 placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required />
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700">Password</label>
               <div className="relative">
                 <input type={showPw ? 'text' : 'password'}
-                  className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+                  className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
                   placeholder="Min. 8 characters" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" required />
                 <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -230,14 +230,14 @@ export default function RegisterPage() {
                   <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
                     <div className={`h-1 rounded-full transition-all ${strengthColor[passwordStrength]} ${strengthWidth[passwordStrength]}`} />
                   </div>
-                  <p className={`text-xs capitalize ${passwordStrength === 'weak' ? 'text-rose-500' : passwordStrength === 'fair' ? 'text-amber-500' : 'text-emerald-600'}`}>{passwordStrength} password</p>
+                  <p className={`text-xs capitalize ${passwordStrength === 'weak' ? 'text-rose-500' : passwordStrength === 'fair' ? 'text-amber-500' : 'text-rose-600'}`}>{passwordStrength} password</p>
                 </div>
               )}
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700">Confirm password</label>
               <input type="password"
-                className={`w-full border bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm ${confirm && confirm !== password ? 'border-rose-300' : 'border-gray-200'}`}
+                className={`w-full border bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm ${confirm && confirm !== password ? 'border-rose-300' : 'border-gray-200'}`}
                 placeholder="Repeat your password" value={confirm} onChange={e => setConfirm(e.target.value)} autoComplete="new-password" required />
             </div>
             {error && <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>}
@@ -248,7 +248,7 @@ export default function RegisterPage() {
           </form>
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
-            <Link to="/login" className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">Sign in</Link>
+            <Link to="/login" className="text-rose-600 hover:text-rose-700 font-medium hover:underline">Sign in</Link>
           </p>
         </div>
       </div>

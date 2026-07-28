@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Blood-red accent — remaps the whole `rose` scale in one place so every
+   existing rose-* class renders as deep blood red, keeping its light→dark ramp. */
+@theme {
+  --color-rose-50:  #fcf1f0;
+  --color-rose-100: #f9dedc;
+  --color-rose-200: #f2b3b0;
+  --color-rose-300: #e17e7c;
+  --color-rose-400: #d13237;
+  --color-rose-500: #b3121b;
+  --color-rose-600: #931017;
+  --color-rose-700: #710c12;
+  --color-rose-800: #55090d;
+}
+
 * {
   font-family: 'Inter', sans-serif;
 }

@@ -25,7 +25,7 @@ export default function SourcesPanel({ show, onHide, sources, vlistRef, getItemS
         <BookOpen className="w-3.5 h-3.5 text-gray-400" />
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Sources</p>
         {sources.length > 0 && (
-          <span className="ml-auto bg-emerald-100 text-emerald-700 text-xs font-medium px-1.5 py-0.5 rounded-full">
+          <span className="ml-auto bg-rose-100 text-rose-700 text-xs font-medium px-1.5 py-0.5 rounded-full">
             {sources.length}
           </span>
         )}

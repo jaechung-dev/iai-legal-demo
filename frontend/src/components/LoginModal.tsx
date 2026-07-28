@@ -47,18 +47,19 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
 
         <div className="bg-zinc-950 px-8 pt-8 pb-6">
           <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-8 h-8 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
-              <Scale className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+              <Scale className="w-4 h-4 text-zinc-950" strokeWidth={2.5} />
             </div>
             <span className="font-bold text-white">{APP_NAME}</span>
           </div>
+          <div className="w-8 h-px bg-amber-500/60 mb-3" />
           <h2 className="text-xl font-bold text-white">Sign in to continue</h2>
           <p className="text-zinc-400 text-sm mt-1">Access the legal intelligence platform</p>
           <div className="mt-4 space-y-2">
             {FEATURES.map(f => (
               <div key={f} className="flex items-center gap-2 text-xs text-zinc-400">
-                <div className="w-4 h-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                  <Check className="w-2.5 h-2.5 text-emerald-400" />
+                <div className="w-4 h-4 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                  <Check className="w-2.5 h-2.5 text-rose-400" />
                 </div>
                 {f}
               </div>
@@ -79,9 +80,9 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3">
-            <input className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+            <input className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
               placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" required />
-            <input type="password" className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+            <input type="password" className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
               placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" required />
             {error && <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>}
             <button type="submit" disabled={loading}
@@ -91,8 +92,8 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
           </form>
 
           <div className="flex items-center justify-between text-xs text-gray-500">
-            <a href="/forgot-password" className="text-emerald-600 hover:underline">Forgot password?</a>
-            <a href="/register" className="text-emerald-600 hover:underline">Create account</a>
+            <a href="/forgot-password" className="text-rose-600 hover:underline">Forgot password?</a>
+            <a href="/register" className="text-rose-600 hover:underline">Create account</a>
           </div>
 
           <div className="relative flex items-center gap-3">
@@ -102,12 +103,12 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <button onClick={() => fillDemo('demo', 'demo1234')}
-            className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all group shadow-sm">
+            className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-rose-300 hover:bg-rose-50/30 transition-all group shadow-sm">
             <div className="text-left">
               <p className="text-sm font-medium text-gray-800">Guest</p>
               <p className="text-xs text-gray-400 mt-0.5">Guest access</p>
             </div>
-            <span className="text-xs text-emerald-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+            <span className="text-xs text-rose-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
               Autofill <ArrowRight className="w-3 h-3" />
             </span>
           </button>

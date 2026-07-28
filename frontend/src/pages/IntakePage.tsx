@@ -64,7 +64,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
 const MAX_FILES = 10
 const ACCEPTED = '.pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.heic'
 
-const field = 'w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm'
+const field = 'w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm'
 
 function fmtSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -173,10 +173,10 @@ function Step2({ data, onChange }: { data: LegalMatter; onChange: (d: LegalMatte
           {MATTER_TYPES.map(({ id, label, Icon, desc }) => (
             <button key={id} type="button" onClick={() => onChange({ ...data, matterType: id, subType: '' })}
               className={`flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all ${
-                data.matterType === id ? 'border-emerald-300 bg-emerald-50/60 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
+                data.matterType === id ? 'border-rose-300 bg-rose-50/60 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
               }`}>
-              <Icon className={`w-4 h-4 ${data.matterType === id ? 'text-emerald-600' : 'text-gray-400'}`} />
-              <span className={`text-xs font-semibold ${data.matterType === id ? 'text-emerald-700' : 'text-gray-700'}`}>{label}</span>
+              <Icon className={`w-4 h-4 ${data.matterType === id ? 'text-rose-600' : 'text-gray-400'}`} />
+              <span className={`text-xs font-semibold ${data.matterType === id ? 'text-rose-700' : 'text-gray-700'}`}>{label}</span>
               <span className="text-xs text-gray-400 leading-snug">{desc}</span>
             </button>
           ))}
@@ -220,10 +220,10 @@ function Step2({ data, onChange }: { data: LegalMatter; onChange: (d: LegalMatte
           {URGENCY.map(u => (
             <button key={u.id} type="button" onClick={() => set('urgency', u.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                data.urgency === u.id ? 'border-emerald-300 bg-emerald-50/60' : 'border-gray-200 bg-white hover:border-gray-300'
+                data.urgency === u.id ? 'border-rose-300 bg-rose-50/60' : 'border-gray-200 bg-white hover:border-gray-300'
               }`}>
               <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                data.urgency === u.id ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'
+                data.urgency === u.id ? 'border-rose-500 bg-rose-500' : 'border-gray-300'
               }`}>
                 {data.urgency === u.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
               </div>
@@ -286,13 +286,13 @@ function Step3({ files, onFilesSelected, onRemove, onCategoryChange }: {
         onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files) }}
         onClick={() => inputRef.current?.click()}
         className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${
-          dragging ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+          dragging ? 'border-rose-400 bg-rose-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
         }`}
       >
         <input ref={inputRef} type="file" className="hidden" multiple accept={ACCEPTED}
           onChange={e => e.target.files && processFiles(e.target.files)} />
         <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-          <Upload className={`w-6 h-6 ${dragging ? 'text-emerald-500' : 'text-gray-400'}`} />
+          <Upload className={`w-6 h-6 ${dragging ? 'text-rose-500' : 'text-gray-400'}`} />
         </div>
         <p className="text-sm font-medium text-gray-700">{dragging ? 'Drop files here' : 'Drag & drop files here'}</p>
         <p className="text-xs text-gray-400 mt-1">or click to browse — PDF, Word, images up to 10 MB each</p>
@@ -313,20 +313,20 @@ function Step3({ files, onFilesSelected, onRemove, onCategoryChange }: {
             <div key={f.id} className={`flex items-start gap-3 bg-white border rounded-xl p-3 shadow-sm ${f.uploadError ? 'border-rose-200' : 'border-gray-100'}`}>
               <div className="w-9 h-9 bg-gray-50 border border-gray-100 rounded-lg flex items-center justify-center shrink-0">
                 {f.uploading
-                  ? <span className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin" />
+                  ? <span className="w-4 h-4 border-2 border-gray-300 border-t-rose-500 rounded-full animate-spin" />
                   : f.uploadError ? <AlertCircle className="w-4 h-4 text-rose-400" />
-                  : <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  : <CheckCircle2 className="w-4 h-4 text-rose-500" />
                 }
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{f.name}</p>
                 <p className="text-xs text-gray-400">
                   {fmtSize(f.size)}
-                  {f.uploading && <span className="ml-2 text-emerald-600">Uploading…</span>}
+                  {f.uploading && <span className="ml-2 text-rose-600">Uploading…</span>}
                   {f.uploadError && <span className="ml-2 text-rose-500">{f.uploadError}</span>}
                 </p>
                 {!f.uploading && !f.uploadError && (
-                  <select className="mt-1.5 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  <select className="mt-1.5 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-rose-500"
                     value={f.category} onChange={e => onCategoryChange(f.id, e.target.value)}>
                     {DOC_CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
@@ -420,7 +420,7 @@ function Step4({ personal, matter, files, onGoToStep, agreed, onAgree, onSubmit,
         <label className="flex items-start gap-3 cursor-pointer group">
           <div onClick={() => onAgree(!agreed)}
             className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
-              agreed ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 group-hover:border-gray-400'
+              agreed ? 'bg-rose-500 border-rose-500' : 'border-gray-300 group-hover:border-gray-400'
             }`}>
             {agreed && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
           </div>
@@ -454,7 +454,7 @@ function SummaryCard({ title, children, onEdit }: { title: string; children: Rea
     <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
         <p className="text-xs font-semibold text-gray-600 uppercase tracking-widest">{title}</p>
-        <button onClick={onEdit} className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium">
+        <button onClick={onEdit} className="flex items-center gap-1 text-xs text-rose-600 hover:text-rose-700 font-medium">
           <Pencil className="w-3 h-3" /> Edit
         </button>
       </div>
@@ -487,14 +487,14 @@ function ProgressBar({ step }: { step: number }) {
             <div key={n} className="flex items-center flex-1 last:flex-none">
               <div className="flex flex-col items-center gap-1.5">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  done ? 'bg-emerald-500 text-white' : active ? 'bg-gray-900 text-white ring-4 ring-gray-900/10' : 'bg-gray-100 text-gray-400'
+                  done ? 'bg-rose-500 text-white' : active ? 'bg-gray-900 text-white ring-4 ring-gray-900/10' : 'bg-gray-100 text-gray-400'
                 }`}>
                   {done ? <Check className="w-4 h-4" /> : n}
                 </div>
-                <span className={`text-xs font-medium hidden sm:block ${active ? 'text-gray-900' : done ? 'text-emerald-600' : 'text-gray-400'}`}>{label}</span>
+                <span className={`text-xs font-medium hidden sm:block ${active ? 'text-gray-900' : done ? 'text-rose-600' : 'text-gray-400'}`}>{label}</span>
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`flex-1 h-px mx-2 mb-5 transition-all ${done ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+                <div className={`flex-1 h-px mx-2 mb-5 transition-all ${done ? 'bg-rose-400' : 'bg-gray-200'}`} />
               )}
             </div>
           )
@@ -517,7 +517,7 @@ function SuccessScreen({ matterType }: { matterType: string }) {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="text-center space-y-6 max-w-sm">
-        <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
+        <div className="w-16 h-16 bg-rose-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-rose-500/30">
           <CheckCircle2 className="w-8 h-8 text-white" />
         </div>
         <div>
@@ -526,11 +526,11 @@ function SuccessScreen({ matterType }: { matterType: string }) {
         </div>
         <div className="flex justify-center gap-1">
           {[0, 1, 2].map(i => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+            <div key={i} className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </div>
         <Link to={`/chat?q=${prompt}`}
-          className="inline-flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium">
+          className="inline-flex items-center gap-2 text-sm text-rose-600 hover:text-rose-700 font-medium">
           Go now <ChevronRight className="w-4 h-4" />
         </Link>
       </div>

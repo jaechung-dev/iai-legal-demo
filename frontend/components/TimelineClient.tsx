@@ -13,7 +13,7 @@ const COLORS: Record<string, { badge: string; dot: string; ring: string }> = {
   Police:         { badge: 'bg-sky-50 text-sky-700 border-sky-100',           dot: 'bg-sky-400',     ring: 'ring-sky-100' },
   Court:          { badge: 'bg-violet-50 text-violet-700 border-violet-100',  dot: 'bg-violet-400',  ring: 'ring-violet-100' },
   Submissions:    { badge: 'bg-yellow-50 text-yellow-700 border-yellow-100',  dot: 'bg-yellow-400',  ring: 'ring-yellow-100' },
-  Verdict:        { badge: 'bg-emerald-50 text-emerald-700 border-emerald-100', dot: 'bg-emerald-400', ring: 'ring-emerald-100' },
+  Verdict:        { badge: 'bg-rose-50 text-rose-700 border-rose-100', dot: 'bg-rose-400', ring: 'ring-rose-100' },
   Medical:        { badge: 'bg-teal-50 text-teal-700 border-teal-100',        dot: 'bg-teal-400',    ring: 'ring-teal-100' },
   Correspondence: { badge: 'bg-indigo-50 text-indigo-700 border-indigo-100',  dot: 'bg-indigo-400',  ring: 'ring-indigo-100' },
   Personal:       { badge: 'bg-pink-50 text-pink-700 border-pink-100',        dot: 'bg-pink-400',    ring: 'ring-pink-100' },

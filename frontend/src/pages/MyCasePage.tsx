@@ -120,7 +120,7 @@ export default function MyCasePage() {
                   onClick={() => { if (!disabled) { setSection(id); setSidebarOpen(false) } }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left ${
                     section === id
-                      ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
+                      ? 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20'
                       : disabled ? 'text-zinc-700 cursor-not-allowed'
                       : 'text-zinc-400 hover:text-white hover:bg-white/5'
                   }`}
@@ -133,7 +133,7 @@ export default function MyCasePage() {
 
           <div className="px-3 py-3 border-t border-zinc-800">
             <Link to="/intake?step=2"
-              className="flex items-center gap-2 w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium px-3 py-2.5 rounded-lg transition-colors">
+              className="flex items-center gap-2 w-full bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium px-3 py-2.5 rounded-lg transition-colors">
               <Plus className="w-4 h-4 shrink-0" /> New case
             </Link>
           </div>

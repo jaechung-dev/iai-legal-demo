@@ -12,7 +12,7 @@ export default function ChatInput({ value, onChange, onSend, disabled }: Props) 
     <div className="border-t border-gray-100 px-4 sm:px-6 py-4 bg-white">
       <div className="max-w-2xl mx-auto flex gap-3 items-center">
         <input
-          className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white placeholder:text-gray-400 shadow-sm"
+          className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white placeholder:text-gray-400 shadow-sm"
           placeholder="Ask a question about NSW law…"
           value={value}
           onChange={e => onChange(e.target.value)}

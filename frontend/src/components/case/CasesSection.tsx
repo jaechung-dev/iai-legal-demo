@@ -51,7 +51,7 @@ export default function CasesSection({ cases, activeCaseId, token, onActivate, o
       {cases.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed border-gray-100 rounded-2xl">
           <p className="text-sm text-gray-400 mb-3">No cases submitted yet.</p>
-          <Link to="/intake?step=2" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1 justify-center">
+          <Link to="/intake?step=2" className="text-sm text-rose-600 hover:text-rose-700 font-medium flex items-center gap-1 justify-center">
             Submit your first case <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
@@ -61,7 +61,7 @@ export default function CasesSection({ cases, activeCaseId, token, onActivate, o
             const active = c.id === activeCaseId
             return (
               <div key={c.id} className={`flex items-center gap-4 p-4 bg-white rounded-xl border shadow-sm transition-all ${
-                active ? 'border-emerald-200 ring-1 ring-emerald-200/50' : 'border-gray-100 hover:border-gray-200'
+                active ? 'border-rose-200 ring-1 ring-rose-200/50' : 'border-gray-100 hover:border-gray-200'
               }`}>
                 <button onClick={() => onActivate(c.id)} className="flex-1 text-left min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -69,7 +69,7 @@ export default function CasesSection({ cases, activeCaseId, token, onActivate, o
                       {MATTER_LABELS[c.matter?.matterType ?? ''] ?? c.matter?.matterType ?? 'Case'}
                     </span>
                     {c.matter?.subType && <span className="text-xs text-gray-400">· {c.matter.subType}</span>}
-                    {active && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">Active</span>}
+                    {active && <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">Active</span>}
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {fmtDate(c.created_at)} · {c.file_count} document{c.file_count !== 1 ? 's' : ''}

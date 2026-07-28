@@ -14,7 +14,7 @@ export default function SearchResult({ result: r, expanded, onToggle, onAsk }: P
 
   return (
     <div className={`bg-white border rounded-xl shadow-sm transition-all cursor-pointer ${
-      expanded ? 'border-emerald-200 shadow-emerald-50' : 'border-gray-100 hover:shadow-md hover:border-gray-200'
+      expanded ? 'border-rose-200 shadow-rose-50' : 'border-gray-100 hover:shadow-md hover:border-gray-200'
     }`}>
       <button className="w-full text-left p-5" onClick={onToggle}>
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -22,7 +22,7 @@ export default function SearchResult({ result: r, expanded, onToggle, onAsk }: P
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <div className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-1.5 bg-emerald-400 rounded-full" style={{ width: `${Math.round(r.metadata.score * 100)}%` }} />
+                <div className="h-1.5 bg-rose-400 rounded-full" style={{ width: `${Math.round(r.metadata.score * 100)}%` }} />
               </div>
               <span className="text-xs text-gray-400 tabular-nums">{Math.round(r.metadata.score * 100)}%</span>
             </div>

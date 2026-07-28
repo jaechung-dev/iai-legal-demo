@@ -32,15 +32,15 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-sm space-y-7">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-zinc-950 rounded-lg flex items-center justify-center">
-            <Scale className="w-4 h-4 text-emerald-400" />
+            <Scale className="w-4 h-4 text-rose-400" />
           </div>
           <span className="font-bold text-gray-900">{APP_NAME}</span>
         </div>
 
         {sent ? (
           <div className="space-y-4">
-            <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 bg-rose-100 rounded-2xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
                 If <span className="font-medium text-gray-700">{email}</span> is registered, a reset link is on its way. It expires in 1 hour.
               </p>
             </div>
-            <Link to="/login" className="flex items-center gap-1.5 text-sm text-emerald-600 hover:underline">
+            <Link to="/login" className="flex items-center gap-1.5 text-sm text-rose-600 hover:underline">
               Back to sign in <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
                 <label className="text-sm font-medium text-gray-700">Email address</label>
                 <input
                   type="email"
-                  className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+                  className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
                   placeholder="you@example.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -87,7 +87,7 @@ export default function ForgotPasswordPage() {
             </form>
             <p className="text-sm text-gray-500">
               Remember it?{' '}
-              <Link to="/login" className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">Sign in</Link>
+              <Link to="/login" className="text-rose-600 hover:text-rose-700 font-medium hover:underline">Sign in</Link>
             </p>
           </>
         )}

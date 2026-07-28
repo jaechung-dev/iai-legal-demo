@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Search, MessageSquare, Clock, Plug, LogIn } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowRight, Search, MessageSquare, Clock, Plug, LogIn, Scale } from 'lucide-react'
 import { useAuth } from '@/context/auth'
 import LoginModal from '../components/LoginModal'
 import { APP_DOMAIN, APP_NAME } from '@/lib/config'
@@ -22,16 +22,24 @@ const SAMPLE_QUESTIONS = [
 export default function HomePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const preview = searchParams.get('preview') !== null
   const [showModal, setShowModal] = useState(false)
   const [ready, setReady] = useState(false)
 
+  // Logged-in users normally get bounced to the app. `?preview=1` (the nav
+  // logo links here) lets them revisit this landing page instead of it being
+  // an orphan they can never see again.
   useEffect(() => {
     if (window.location.hostname.startsWith('stage.')) {
       navigate('/chat', { replace: true }); return
     }
-    if (user) { navigate('/chat', { replace: true }); return }
+    if (user && !preview) { navigate('/chat', { replace: true }); return }
     setReady(true)
-  }, [user, navigate])
+  }, [user, preview, navigate])
+
+  // CTAs: enter the app if already signed in, else open the login modal.
+  const cta = () => (user ? navigate('/chat') : setShowModal(true))
 
   if (!ready) return null
 
@@ -43,41 +51,74 @@ export default function HomePage() {
         {/* Nav */}
         <header className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-8 py-5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl border border-zinc-700 overflow-hidden shrink-0" style={{ background: '#0a0a0a' }}>
-              <div style={{
-                width: '100%', height: '100%',
-                backgroundImage: 'url(/justiti.png)',
-                backgroundSize: '320% auto',
-                backgroundPosition: '36% 8%',
-                backgroundRepeat: 'no-repeat',
-                filter: 'invert(1) brightness(0.9)',
-              }} />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0 shadow-sm">
+              <Scale className="w-5 h-5 text-zinc-950" strokeWidth={2.5} />
             </div>
             <span className="font-serif text-lg font-semibold text-white tracking-wide">{APP_NAME}</span>
           </div>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={cta}
             className="flex items-center gap-1.5 text-sm font-medium text-zinc-400 hover:text-white transition-colors"
           >
-            Sign in <ArrowRight className="w-3.5 h-3.5" />
+            {user ? 'Open app' : 'Sign in'} <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </header>
 
         {/* Hero */}
-        <section className="flex-1 flex flex-col lg:flex-row" style={{ minHeight: '100svh' }}>
-          {/* Left — content */}
-          <div className="flex flex-col justify-center px-8 sm:px-16 lg:px-24 pt-28 pb-16 lg:py-0 lg:w-[58%] z-10">
+        <section className="flex-1 flex flex-col lg:flex-row relative" style={{ minHeight: '100svh' }}>
+          {/* Deep crimson divine glow */}
+          <div className="absolute inset-0 pointer-events-none" style={{
+            background: 'radial-gradient(ellipse 55% 65% at 22% 52%, rgba(136,19,55,0.09) 0%, transparent 65%)',
+          }} />
 
-            <h1 className="font-serif text-5xl sm:text-6xl xl:text-[4.25rem] font-bold text-white leading-[1.1] tracking-tight mb-5">
+          {/* Left — content */}
+          <div className="flex flex-col justify-center px-8 sm:px-16 lg:px-24 pt-28 pb-16 lg:pt-24 lg:pb-0 lg:w-[58%] z-10">
+
+            {/* Latin inscription */}
+            <p className="text-[10px] tracking-[0.35em] font-semibold text-amber-500/55 uppercase mb-4">
+              Iustitia · Veritas · Lex
+            </p>
+
+            {/* Upper gold frieze */}
+            <div className="flex items-center gap-1 mb-5 w-60">
+              <div className="h-px w-2 bg-amber-800/40" />
+              <div className="w-px h-2.5 bg-amber-600/50 shrink-0" />
+              <div className="h-px flex-1 bg-amber-600/55" />
+              <div className="w-1.5 h-1.5 rotate-45 bg-amber-500/75 shrink-0" />
+              <div className="h-px w-2 bg-amber-400/90" />
+              <div className="w-3 h-3 rotate-45 bg-amber-400 shrink-0" />
+              <div className="h-px w-2 bg-amber-400/90" />
+              <div className="w-1.5 h-1.5 rotate-45 bg-amber-500/75 shrink-0" />
+              <div className="h-px flex-1 bg-amber-600/55" />
+              <div className="w-px h-2.5 bg-amber-600/50 shrink-0" />
+              <div className="h-px w-2 bg-amber-800/40" />
+            </div>
+
+            <h1 className="font-serif text-5xl sm:text-6xl xl:text-[4.5rem] font-bold text-white leading-[1.08] tracking-tight mb-4">
               Legal help<br />
-              <span className="text-emerald-400">in plain English</span>
+              <span className="text-rose-400">in plain English</span>
             </h1>
 
-            <p className="text-base text-zinc-400 max-w-md mb-5 leading-relaxed">
+            {/* Lower frieze */}
+            <div className="flex items-center gap-1 mb-7 w-44">
+              <div className="h-px flex-1 bg-amber-700/35" />
+              <div className="w-1 h-1 rotate-45 bg-amber-600/55 shrink-0" />
+              <div className="h-px w-4 bg-amber-600/45" />
+              <div className="w-1 h-1 rotate-45 bg-amber-600/55 shrink-0" />
+              <div className="h-px flex-1 bg-amber-700/35" />
+            </div>
+
+            <p className="text-sm text-zinc-500 max-w-md mb-7 leading-relaxed">
               Search NSW legislation, ask questions, and get AI-powered analysis grounded in real court decisions — at no cost.
             </p>
 
-            <div className="border-l-2 border-emerald-500/40 pl-5 mb-8">
+            {/* Stone inscription quote */}
+            <div className="relative max-w-md mb-8 pl-6">
+              <div className="absolute left-0 top-0 bottom-0 flex flex-col items-center">
+                <div className="w-1.5 h-1.5 rotate-45 bg-amber-500/70 shrink-0" />
+                <div className="w-px flex-1 bg-amber-500/25 mt-1 mb-1" />
+                <div className="w-1.5 h-1.5 rotate-45 bg-amber-500/70 shrink-0" />
+              </div>
               <p className="text-sm text-zinc-400 leading-relaxed italic">
                 "Everyone deserves to understand their legal situation, not just those who can afford a lawyer."
               </p>
@@ -85,30 +126,34 @@ export default function HomePage() {
 
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl px-8 py-3.5 text-sm font-bold transition-all shadow-lg shadow-emerald-900/30"
+                onClick={cta}
+                className="flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 text-zinc-950 rounded-xl px-8 py-3.5 text-sm font-bold transition-all shadow-lg shadow-amber-900/40"
               >
-                Sign in <ArrowRight className="w-4 h-4" />
+                {user ? 'Open app' : 'Sign in'} <ArrowRight className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center justify-center gap-2 border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white rounded-xl px-8 py-3.5 text-sm font-semibold transition-all"
-              >
-                Create account
-              </button>
+              {!user && (
+                <button
+                  onClick={cta}
+                  className="flex items-center justify-center gap-2 border border-zinc-700 hover:border-amber-600/50 text-zinc-400 hover:text-white rounded-xl px-8 py-3.5 text-sm font-semibold transition-all"
+                >
+                  Create account
+                </button>
+              )}
             </div>
 
             {/* Demo login */}
-            <div className="flex items-center gap-3 bg-zinc-900/80 border border-zinc-800 rounded-xl px-4 py-3 mb-10 max-w-sm">
-              <LogIn className="w-4 h-4 text-emerald-400 shrink-0" />
-              <p className="text-xs text-zinc-400">
-                Try instantly —{' '}
-                <button onClick={() => setShowModal(true)} className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors">
-                  sign in
-                </button>
-                {' '}with <span className="font-mono text-zinc-300">demo</span> / <span className="font-mono text-zinc-300">demo1234</span>
-              </p>
-            </div>
+            {!user && (
+              <div className="flex items-center gap-3 bg-zinc-900/80 border border-zinc-800 rounded-xl px-4 py-3 mb-10 max-w-sm">
+                <LogIn className="w-4 h-4 text-rose-400 shrink-0" />
+                <p className="text-xs text-zinc-400">
+                  Try instantly —{' '}
+                  <button onClick={cta} className="text-rose-400 hover:text-rose-300 font-semibold transition-colors">
+                    sign in
+                  </button>
+                  {' '}with <span className="font-mono text-zinc-300">demo</span> / <span className="font-mono text-zinc-300">demo1234</span>
+                </p>
+              </div>
+            )}
 
             {/* Sample questions */}
             <div className="max-w-lg">
@@ -117,12 +162,12 @@ export default function HomePage() {
                 {SAMPLE_QUESTIONS.map(q => (
                   <button
                     key={q}
-                    onClick={() => setShowModal(true)}
+                    onClick={cta}
                     className="w-full text-left flex items-start gap-3 bg-zinc-900/50 hover:bg-zinc-800/70 border border-zinc-800 hover:border-zinc-700 rounded-xl px-4 py-3 transition-all group"
                   >
-                    <Search className="w-3.5 h-3.5 text-zinc-600 group-hover:text-emerald-400 mt-0.5 shrink-0 transition-colors" />
+                    <Search className="w-3.5 h-3.5 text-zinc-600 group-hover:text-rose-400 mt-0.5 shrink-0 transition-colors" />
                     <span className="text-sm text-zinc-400 group-hover:text-zinc-200 transition-colors leading-snug">{q}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-emerald-400 ml-auto shrink-0 mt-0.5 transition-colors" />
+                    <ArrowRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-rose-400 ml-auto shrink-0 mt-0.5 transition-colors" />
                   </button>
                 ))}
               </div>
@@ -131,24 +176,35 @@ export default function HomePage() {
 
           {/* Right — Lady Justice */}
           <div className="hidden lg:block lg:w-[42%] relative overflow-hidden">
+            {/* Top vignette */}
+            <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-zinc-950 to-transparent pointer-events-none z-10" />
+            {/* Bottom vignette */}
+            <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-zinc-950 to-transparent pointer-events-none z-10" />
+
             <div className="absolute inset-0" style={{
               backgroundImage: 'url(/justiti.png)',
-              backgroundSize: 'auto 92%',
+              backgroundSize: 'auto 94%',
               backgroundPosition: '38% bottom',
               backgroundRepeat: 'no-repeat',
-              filter: 'invert(1) brightness(0.75)',
+              filter: 'invert(1) brightness(0.65) sepia(0.15)',
             }} />
-            <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-zinc-950 to-transparent pointer-events-none z-10" />
+            <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-zinc-950 to-transparent pointer-events-none z-10" />
 
             {/* Feature chips */}
             <div className="absolute bottom-16 right-8 space-y-2 z-20">
               {FEATURES.map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-2 bg-zinc-950/80 border border-zinc-800 rounded-lg px-3 py-2 backdrop-blur-sm">
-                  <Icon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="text-xs text-zinc-300">{text}</span>
+                <div key={text} className="flex items-center gap-2 bg-zinc-950/85 border border-zinc-800/80 rounded-lg px-3 py-2 backdrop-blur-sm">
+                  <div className="w-1 h-1 rotate-45 bg-amber-500/60 shrink-0" />
+                  <Icon className="w-3.5 h-3.5 text-rose-400/80 shrink-0" />
+                  <span className="text-xs text-zinc-400">{text}</span>
                 </div>
               ))}
             </div>
+
+            {/* Decorative column line */}
+            <div className="absolute top-24 bottom-24 left-12 w-px z-20" style={{
+              background: 'linear-gradient(to bottom, transparent, rgba(217,119,6,0.25) 20%, rgba(217,119,6,0.25) 80%, transparent)',
+            }} />
           </div>
         </section>
 
@@ -156,15 +212,8 @@ export default function HomePage() {
         <footer className="border-t border-zinc-800/60 bg-zinc-950">
           <div className="max-w-6xl mx-auto px-8 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg border border-zinc-700 overflow-hidden shrink-0" style={{ background: '#0a0a0a' }}>
-                <div style={{
-                  width: '100%', height: '100%',
-                  backgroundImage: 'url(/justiti.png)',
-                  backgroundSize: '320% auto',
-                  backgroundPosition: '36% 8%',
-                  backgroundRepeat: 'no-repeat',
-                  filter: 'invert(1) brightness(0.9)',
-                }} />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
+                <Scale className="w-4 h-4 text-zinc-950" strokeWidth={2.5} />
               </div>
               <div>
                 <p className="font-serif font-semibold text-white text-sm">{APP_NAME}</p>
@@ -172,9 +221,9 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-6">
-              <button onClick={() => setShowModal(true)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Search</button>
-              <button onClick={() => setShowModal(true)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Ask a question</button>
-              <button onClick={() => setShowModal(true)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Connect AI</button>
+              <button onClick={cta} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Search</button>
+              <button onClick={cta} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Ask a question</button>
+              <button onClick={cta} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Connect AI</button>
               <span className="text-xs text-zinc-700">{APP_DOMAIN}</span>
             </div>
           </div>

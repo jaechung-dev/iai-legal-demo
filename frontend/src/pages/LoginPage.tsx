@@ -14,12 +14,12 @@ const FEATURES = [
 function LoginBanner() {
   const [params] = useSearchParams()
   if (params.get('verified') === '1') return (
-    <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700 font-medium">
+    <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700 font-medium">
       Email verified! You can now sign in.
     </div>
   )
   if (params.get('reset') === '1') return (
-    <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700 font-medium">
+    <div className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700 font-medium">
       Password reset successfully. Please sign in.
     </div>
   )
@@ -61,10 +61,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex bg-white">
       <div className="hidden lg:flex lg:w-[45%] bg-zinc-950 flex-col justify-between p-12 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(52,211,153,0.08)_0%,_transparent_60%)]" />
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-rose-500/20 to-transparent" />
 
         <Link to="/" className="relative flex items-center gap-2.5 w-fit">
-          <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+          <div className="w-9 h-9 bg-rose-500 rounded-xl flex items-center justify-center shadow-lg shadow-rose-500/30">
             <Scale className="w-5 h-5 text-white" />
           </div>
           <span className="font-bold text-white text-base tracking-tight">{APP_NAME}</span>
@@ -72,7 +72,7 @@ export default function LoginPage() {
 
         <div className="relative space-y-10">
           <div>
-            <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">Free · NSW · AI-powered</p>
+            <p className="text-xs font-semibold text-rose-400 uppercase tracking-widest mb-3">Free · NSW · AI-powered</p>
             <h2 className="text-4xl font-bold text-white leading-tight">Free legal help<br />in plain English</h2>
             <p className="text-zinc-400 mt-4 leading-relaxed text-sm max-w-sm">
               Search NSW legislation and caselaw, ask legal questions, and explore case timelines — powered by AI.
@@ -81,8 +81,8 @@ export default function LoginPage() {
           <div className="space-y-3">
             {FEATURES.map(f => (
               <div key={f} className="flex items-center gap-3 text-sm text-zinc-400">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                  <Check className="w-3 h-3 text-emerald-400" />
+                <div className="w-5 h-5 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                  <Check className="w-3 h-3 text-rose-400" />
                 </div>
                 {f}
               </div>
@@ -99,7 +99,7 @@ export default function LoginPage() {
 
           <Link to="/" className="lg:hidden flex items-center gap-2.5 w-fit">
             <div className="w-8 h-8 bg-zinc-950 rounded-lg flex items-center justify-center">
-              <Scale className="w-4 h-4 text-emerald-400" />
+              <Scale className="w-4 h-4 text-rose-400" />
             </div>
             <span className="font-bold text-gray-900">{APP_NAME}</span>
           </Link>
@@ -128,7 +128,7 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700">Username</label>
               <input
-                className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+                className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
                 placeholder="username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
@@ -139,13 +139,13 @@ export default function LoginPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium text-gray-700">Password</label>
-                <Link to="/forgot-password" className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline">
+                <Link to="/forgot-password" className="text-xs text-rose-600 hover:text-rose-700 hover:underline">
                   Forgot password?
                 </Link>
               </div>
               <input
                 type="password"
-                className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
+                className="w-full border border-gray-200 bg-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder:text-gray-400 shadow-sm"
                 placeholder="••••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -174,13 +174,13 @@ export default function LoginPage() {
           <div className="space-y-2">
             <button
               onClick={() => fillDemo('demo', 'demo1234')}
-              className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all group shadow-sm"
+              className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-rose-300 hover:bg-rose-50/30 transition-all group shadow-sm"
             >
               <div className="text-left">
                 <p className="text-sm font-medium text-gray-800">Guest</p>
                 <p className="text-xs text-gray-400 mt-0.5">Guest access</p>
               </div>
-              <span className="text-xs text-emerald-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+              <span className="text-xs text-rose-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                 Autofill <ArrowRight className="w-3 h-3" />
               </span>
             </button>
@@ -188,14 +188,14 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-gray-500">
             New here?{' '}
-            <Link to="/register" className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
+            <Link to="/register" className="text-rose-600 hover:text-rose-700 font-medium hover:underline">
               Create a free account
             </Link>
           </p>
 
           <p className="text-center text-xs text-gray-400">
             Connecting Claude or a GPT?{' '}
-            <Link to="/connect" className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
+            <Link to="/connect" className="text-rose-600 hover:text-rose-700 font-medium hover:underline">
               Get an API token
             </Link>
           </p>

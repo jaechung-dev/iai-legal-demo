@@ -106,14 +106,14 @@ export default function DocumentsSection({ detail, caseId, token, onFilesUpdated
         <div className="space-y-2">
           {files.map((f, i) => (
             <div key={i} className="flex items-start gap-3 bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
-              <div className="w-9 h-9 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <div className="w-9 h-9 bg-rose-50 border border-rose-100 rounded-lg flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4 text-rose-500" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{f.name}</p>
                 <p className="text-xs text-gray-400">{fmtSize(f.size)}</p>
                 <select
-                  className="mt-1.5 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="mt-1.5 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-rose-500"
                   value={f.category}
                   onChange={e => updateCategory(i, e.target.value)}
                 >
@@ -129,7 +129,7 @@ export default function DocumentsSection({ detail, caseId, token, onFilesUpdated
             <div key={u.id} className={`flex items-start gap-3 bg-white border rounded-xl p-3 shadow-sm ${u.error ? 'border-rose-100' : 'border-gray-100'}`}>
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${u.error ? 'bg-rose-50 border border-rose-100' : 'bg-gray-50 border border-gray-100'}`}>
                 {u.uploading
-                  ? <span className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin" />
+                  ? <span className="w-4 h-4 border-2 border-gray-300 border-t-rose-500 rounded-full animate-spin" />
                   : <AlertCircle className="w-4 h-4 text-rose-400" />
                 }
               </div>
@@ -137,7 +137,7 @@ export default function DocumentsSection({ detail, caseId, token, onFilesUpdated
                 <p className="text-sm font-medium text-gray-800 truncate">{u.name}</p>
                 <p className="text-xs">
                   {u.uploading
-                    ? <span className="text-emerald-600">Uploading…</span>
+                    ? <span className="text-rose-600">Uploading…</span>
                     : <span className="text-rose-500">{u.error}</span>
                   }
                 </p>

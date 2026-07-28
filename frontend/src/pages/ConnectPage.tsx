@@ -148,7 +148,7 @@ export default function ConnectPage() {
                   return (
                     <li key={t.id}>
                       <div className="px-3 py-2.5 flex items-start gap-2.5 group">
-                        <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${active ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${active ? 'bg-rose-500' : 'bg-red-500'}`} />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-zinc-300 truncate">{t.name}</p>
                           <p className="text-[10px] text-zinc-600 mt-0.5 flex items-center gap-1">
@@ -179,9 +179,9 @@ export default function ConnectPage() {
           </div>
 
           <div className="px-3 py-3 border-t border-zinc-800">
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-              <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span className="text-xs text-emerald-400 font-medium">MCP ready</span>
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+              <Zap className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span className="text-xs text-rose-400 font-medium">MCP ready</span>
             </div>
           </div>
         </aside>
@@ -214,7 +214,7 @@ export default function ConnectPage() {
                   that gives your AI assistant live access to NSW legal data — statutes, regulations, and court decisions.
                 </p>
                 <p>
-                  Once connected, you can ask your AI client things like <span className="text-emerald-400 italic">"What does the Residential Tenancies Act say about bond refunds?"</span> and
+                  Once connected, you can ask your AI client things like <span className="text-rose-400 italic">"What does the Residential Tenancies Act say about bond refunds?"</span> and
                   it will search the actual legislation and return grounded answers with citations.
                 </p>
               </div>
@@ -227,9 +227,9 @@ export default function ConnectPage() {
               </div>
               <div className="divide-y divide-gray-100">
                 {[
-                  { name: 'Claude Desktop', status: 'Supported', detail: 'Native MCP support — paste the config snippet below into claude_desktop_config.json', badge: 'bg-emerald-100 text-emerald-700' },
-                  { name: 'Claude.ai (web)', status: 'Supported', detail: 'Available on Pro and Team plans via the Integrations tab', badge: 'bg-emerald-100 text-emerald-700' },
-                  { name: 'Cursor / Windsurf', status: 'Supported', detail: 'Add the MCP server URL in your editor\'s MCP settings', badge: 'bg-emerald-100 text-emerald-700' },
+                  { name: 'Claude Desktop', status: 'Supported', detail: 'Native MCP support — paste the config snippet below into claude_desktop_config.json', badge: 'bg-rose-100 text-rose-700' },
+                  { name: 'Claude.ai (web)', status: 'Supported', detail: 'Available on Pro and Team plans via the Integrations tab', badge: 'bg-rose-100 text-rose-700' },
+                  { name: 'Cursor / Windsurf', status: 'Supported', detail: 'Add the MCP server URL in your editor\'s MCP settings', badge: 'bg-rose-100 text-rose-700' },
                   { name: 'Other MCP clients', status: 'Via mcp-remote', detail: 'Any client that supports the MCP standard works via npx mcp-remote', badge: 'bg-zinc-100 text-zinc-600' },
                 ].map(c => (
                   <div key={c.name} className="px-5 py-4 flex items-start justify-between gap-4">
@@ -253,7 +253,7 @@ export default function ConnectPage() {
               <div className="p-5 space-y-3">
                 <div className="flex gap-2">
                   <input
-                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent shadow-sm placeholder:text-gray-400"
+                    className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent shadow-sm placeholder:text-gray-400"
                     placeholder="Token name (e.g. My Claude Desktop)"
                     value={newName}
                     onChange={e => setNewName(e.target.value)}
@@ -278,19 +278,19 @@ export default function ConnectPage() {
             </div>
 
             {newToken && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-emerald-100 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-emerald-800">Token created — copy it now</p>
-                  <span className="text-xs text-emerald-600 bg-emerald-100 rounded-full px-2.5 py-1">Shown once only</span>
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-rose-100 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-rose-800">Token created — copy it now</p>
+                  <span className="text-xs text-rose-600 bg-rose-100 rounded-full px-2.5 py-1">Shown once only</span>
                 </div>
                 <div className="p-5 space-y-4">
                   <div className="bg-zinc-950 rounded-xl p-4 border border-zinc-800 flex items-start justify-between gap-3">
-                    <p className="text-xs font-mono text-emerald-400 break-all leading-relaxed">{newToken}</p>
+                    <p className="text-xs font-mono text-rose-400 break-all leading-relaxed">{newToken}</p>
                     <button
                       onClick={() => copy(newToken, 'token')}
                       className="shrink-0 flex items-center gap-1.5 text-xs border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 rounded-lg px-3 py-1.5 transition-all"
                     >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? <Check className="w-3.5 h-3.5 text-rose-400" /> : <Copy className="w-3.5 h-3.5" />}
                       {copied ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
@@ -301,7 +301,7 @@ export default function ConnectPage() {
                         onClick={() => copy(cfgSnippet(newToken), 'cfg')}
                         className="flex items-center gap-1.5 text-xs border border-gray-200 text-gray-500 hover:text-gray-800 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-all bg-white"
                       >
-                        {copiedCfg ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedCfg ? <Check className="w-3.5 h-3.5 text-rose-500" /> : <Copy className="w-3.5 h-3.5" />}
                         {copiedCfg ? 'Copied!' : 'Copy config'}
                       </button>
                     </div>
