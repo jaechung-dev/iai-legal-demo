@@ -676,6 +676,17 @@ cd terraform && terraform apply
 
 Push to `main` → GitHub Actions OIDC assumes deploy role (keyless, no stored secrets) → uploads Lambda zips → updates Lambda function code → invalidates CloudFront.
 
+### Security scanning (supply chain)
+
+Every push, PR, and a weekly schedule run [`security.yml`](.github/workflows/security.yml):
+
+- **SAST** — CodeQL (JS/TS + Python)
+- **Dependencies** — Dependabot + `npm audit` + `pip-audit` (known-vulnerable / outdated packages)
+- **Containers & IaC** — Trivy (`vuln,secret,misconfig`) across the service Dockerfiles
+- **Secrets** — Gitleaks
+
+Findings surface in the repo **Security** tab; Dependabot opens patch PRs across npm, pip, Docker base images, and pinned Actions. Policy: [`SECURITY.md`](SECURITY.md).
+
 ### Switching LLM
 
 ```bash
