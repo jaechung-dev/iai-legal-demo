@@ -1,0 +1,47 @@
+# Automated dependency updates + vulnerability alerts.
+# Financial-grade repos are expected to keep dependencies patched; Dependabot
+# opens PRs for known-vulnerable and outdated packages across every ecosystem.
+version: 2
+updates:
+  # ── Frontend (Vite / React / TS) ────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      frontend-minor:
+        update-types: ["minor", "patch"]
+
+  # ── Root Node tooling ───────────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # ── Python services (requirements*.txt live at repo root) ───────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+  # ── Container base images ───────────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/services/auth"
+    schedule: { interval: "weekly" }
+  - package-ecosystem: "docker"
+    directory: "/services/mcp"
+    schedule: { interval: "weekly" }
+  - package-ecosystem: "docker"
+    directory: "/services/rag"
+    schedule: { interval: "weekly" }
+  - package-ecosystem: "docker"
+    directory: "/services/bff"
+    schedule: { interval: "weekly" }
+
+  # ── CI/CD action pins ───────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
