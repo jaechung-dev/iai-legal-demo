@@ -19,6 +19,8 @@ export function useGuestQuota() {
   const [showGate, setShowGate] = useState(false)
 
   // Call before each question. Returns true if the question can proceed.
+  // Client-side check for instant UX; the server enforces the real limit per IP
+  // (see services/bff/main.py) so clearing localStorage can't grant more.
   const gate = useCallback((): boolean => {
     if (user) return true
     if (getCount() < FREE_LIMIT) {
@@ -29,7 +31,14 @@ export function useGuestQuota() {
     return false
   }, [user])
 
+  // Open the gate in response to a server-side rejection (HTTP 401 on /chat).
+  // Also pin the local counter to the limit so the client stays in sync.
+  const forceGate = useCallback(() => {
+    try { localStorage.setItem(STORAGE_KEY, String(FREE_LIMIT)) } catch {}
+    setShowGate(true)
+  }, [])
+
   const dismissGate = useCallback(() => setShowGate(false), [])
 
-  return { gate, showGate, dismissGate }
+  return { gate, forceGate, showGate, dismissGate, freeLimit: FREE_LIMIT }
 }

@@ -53,8 +53,12 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
             <span className="font-bold text-white">{APP_NAME}</span>
           </div>
           <div className="w-8 h-px bg-amber-500/60 mb-3" />
-          <h2 className="text-xl font-bold text-white">Sign in to continue</h2>
-          <p className="text-zinc-400 text-sm mt-1">Access the legal intelligence platform</p>
+          <h2 className="text-xl font-bold text-white">
+            You&rsquo;ve used your <span className="text-rose-400">2 free messages</span>
+          </h2>
+          <p className="text-zinc-400 text-sm mt-1">
+            Create a free account or sign in to keep asking — it only takes a moment.
+          </p>
           <div className="mt-4 space-y-2">
             {FEATURES.map(f => (
               <div key={f} className="flex items-center gap-2 text-xs text-zinc-400">
@@ -68,6 +72,17 @@ export default function LoginModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="px-8 py-6 space-y-4">
+          <button type="button" onClick={() => navigate('/register')}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-amber-400 to-amber-600 text-zinc-950 rounded-xl h-11 text-sm font-semibold hover:from-amber-300 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/20">
+            Create free account <ArrowRight className="w-4 h-4" />
+          </button>
+
+          <div className="relative flex items-center gap-3">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="text-xs text-gray-500 font-medium">or sign in</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+
           <button type="button" onClick={() => { window.location.href = `${API}/auth/google` }}
             className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 rounded-xl h-11 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
             <GoogleIcon />Continue with Google

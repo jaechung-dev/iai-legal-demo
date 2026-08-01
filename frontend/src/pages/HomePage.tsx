@@ -1,9 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { ArrowRight, Search, MessageSquare, Clock, Plug, LogIn, Scale } from 'lucide-react'
 import { useAuth } from '@/context/auth'
 import LoginModal from '../components/LoginModal'
-import { APP_DOMAIN, APP_NAME } from '@/lib/config'
+import { APP_DOMAIN, APP_NAME, APP_URL } from '@/lib/config'
+
+// Canonical origin for the landing page. The site is reachable at the apex,
+// www, and preview subdomains + CloudFront's SPA fallback serves this HTML for
+// every route, so we pin an absolute canonical to "/" on the www host to stop
+// crawlers indexing deep app routes (e.g. /chat) as the homepage.
+const CANONICAL_ORIGIN = (APP_URL && APP_URL.startsWith('https://'))
+  ? APP_URL.replace(/\/$/, '')
+  : `https://www.${APP_DOMAIN}`
+const SEO_TITLE = `${APP_NAME} — Free NSW legal help in plain English`
+const SEO_DESC =
+  'Ask about NSW law and get plain-English answers backed by real legislation ' +
+  'and caselaw. Free legal information for everyday people — a starting point, not legal advice.'
 
 const FEATURES = [
   { icon: Search,        text: 'NSW legislation & caselaw search' },
@@ -44,6 +57,27 @@ export default function HomePage() {
 
   return (
     <>
+      <Helmet>
+        <title>{SEO_TITLE}</title>
+        <meta name="description" content={SEO_DESC} />
+        <link rel="canonical" href={`${CANONICAL_ORIGIN}/`} />
+        <meta name="robots" content="index,follow" />
+
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content={APP_NAME} />
+        <meta property="og:title" content={SEO_TITLE} />
+        <meta property="og:description" content={SEO_DESC} />
+        <meta property="og:url" content={`${CANONICAL_ORIGIN}/`} />
+        <meta property="og:image" content={`${CANONICAL_ORIGIN}/justiti.png`} />
+
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={SEO_TITLE} />
+        <meta name="twitter:description" content={SEO_DESC} />
+        <meta name="twitter:image" content={`${CANONICAL_ORIGIN}/justiti.png`} />
+      </Helmet>
+
       {showModal && <LoginModal onClose={() => setShowModal(false)} />}
 
       <div className="min-h-screen flex flex-col bg-zinc-950 text-white">

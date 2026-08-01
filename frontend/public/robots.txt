@@ -1,12 +1,20 @@
 User-agent: *
 Allow: /
-Allow: /search/
+Allow: /search
+Allow: /login
+Allow: /register
 
-# Authenticated pages — no value to crawlers
-Disallow: /chat/
+# NOTE: /chat is intentionally NOT disallowed. Google already indexed /chat from
+# an old deploy; it must be crawlable so Googlebot reads its canonical (-> /) and
+# consolidates that stale result onto the landing page. Blocking it would freeze
+# the old /chat entry in search results. Truly private app routes stay blocked.
+Disallow: /my-case
 Disallow: /my-case/
+Disallow: /connect
 Disallow: /connect/
+Disallow: /intake
 Disallow: /intake/
+Disallow: /auth
 Disallow: /auth/
 
 Sitemap: https://www.probonoai.com.au/sitemap.xml

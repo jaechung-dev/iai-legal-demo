@@ -4,7 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
-    <title>ProBono AI</title>
+    <!-- Default SEO for the static shell. The landing route ("/") is
+         pre-rendered (scripts/prerender.mjs) and react-helmet-async injects the
+         richer per-page tags there; these defaults ensure any crawler that hits
+         the raw shell still gets a sensible title/description/canonical. -->
+    <title>ProBono AI — Free NSW legal help in plain English</title>
+    <meta name="description" content="Ask about NSW law and get plain-English answers backed by real legislation and caselaw. Free legal information for everyday people — a starting point, not legal advice." />
+    <link rel="canonical" href="https://www.probonoai.com.au/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ProBono AI" />
+    <meta property="og:title" content="ProBono AI — Free NSW legal help in plain English" />
+    <meta property="og:description" content="Ask about NSW law and get plain-English answers backed by real legislation and caselaw." />
+    <meta property="og:url" content="https://www.probonoai.com.au/" />
+    <meta property="og:image" content="https://www.probonoai.com.au/justiti.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />

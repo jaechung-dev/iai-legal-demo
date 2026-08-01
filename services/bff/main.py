@@ -36,6 +36,7 @@ from services.auth.service import (
     JWT_SECRET,
     JWT_ALG,
 )
+from services.core.cache import get_redis
 from services.rag.retrievers import (
     LegislationRetriever,
     CaselawRetriever,
@@ -176,6 +177,53 @@ def _require_auth(authorization: str | None) -> str:
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+# ── Anonymous chat quota ─────────────────────────────────────────────────────────
+#
+# Anonymous (not-logged-in) visitors may send at most ANON_CHAT_LIMIT chat
+# messages before they must register or log in. The frontend also enforces this
+# (see frontend/hooks/useGuestQuota.ts) for instant UX, but that count lives in
+# localStorage and is trivially reset. This server-side check is the real gate:
+# it counts anonymous /chat calls per client IP in Redis with a rolling daily
+# window. It fails OPEN when Redis is not configured (same policy as the auth
+# rate limiter) so local/dev without Redis still works.
+
+ANON_CHAT_LIMIT = int(os.getenv("ANON_CHAT_LIMIT", "2"))
+_ANON_CHAT_WINDOW = int(os.getenv("ANON_CHAT_WINDOW", str(24 * 60 * 60)))  # seconds
+
+
+def _client_ip(request: Request | None) -> str:
+    if request is None:
+        return "-"
+    return (
+        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or request.headers.get("x-real-ip", "")
+        or (request.client.host if request.client else "-")
+    )
+
+
+async def _enforce_anon_chat_limit(request: Request | None) -> None:
+    """Raise 401 once an anonymous IP has used up its free chat messages.
+
+    401 (rather than 429) so the frontend treats it like an auth requirement and
+    surfaces the register / log-in prompt. No-op when Redis is unavailable.
+    """
+    redis = await get_redis()
+    if redis is None:
+        return
+    ip = _client_ip(request)
+    if ip in ("", "-"):
+        return
+    key = f"anon:chat:{ip}"
+    count = await redis.incr(key)
+    if count == 1:
+        await redis.expire(key, _ANON_CHAT_WINDOW)
+    if count > ANON_CHAT_LIMIT:
+        raise HTTPException(
+            status_code=401,
+            detail="Free message limit reached. Please register or log in to continue.",
+        )
 
 
 # ── App ────────────────────────────────────────────────────────────────────────
@@ -403,8 +451,11 @@ async def ask(req: AskRequest, authorization: str = Header(default=None)):
 
 
 @app.post("/chat")
-async def chat(req: ChatRequest, authorization: str = Header(default=None)):
+async def chat(req: ChatRequest, request: Request, authorization: str = Header(default=None)):
     user = _get_user_from_header(authorization)
+    # Gate anonymous users to the free-message quota (logged-in users unlimited).
+    if user == "anon":
+        await _enforce_anon_chat_limit(request)
     logger.info(
         "chat question=%r messages=%d case_id=%s user=%s",
         req.question[:120], len(req.messages), req.case_id, user,

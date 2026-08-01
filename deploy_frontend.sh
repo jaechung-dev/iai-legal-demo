@@ -1,6 +1,12 @@
 #!/bin/bash
-# Upload Next.js static export to S3 and invalidate CloudFront cache
+# Upload the Vite static build to S3 and invalidate CloudFront cache.
 # Usage: ./deploy_frontend.sh
+#
+# NOTE: the app was migrated Next.js -> Vite. Vite builds to frontend/dist/
+# (see frontend/vite.config.ts `outDir`). The old frontend/out/ directory is a
+# STALE Next.js export that still contains crawlable deep-link pages such as
+# /chat/index.html titled "Legal Intelligence Platform" — syncing it is what let
+# Google index /chat instead of the landing page. Always sync frontend/dist/.
 
 set -e
 
@@ -15,15 +21,22 @@ NEXT_PUBLIC_API_URL=$(cd ../terraform && terraform output -raw api_url) npm run 
 cd ..
 
 echo "→ Uploading to s3://${BUCKET}..."
-aws s3 sync frontend/out/ s3://${BUCKET}/ --delete \
+# Long-cache the fingerprinted assets, but never cache HTML or the SEO files
+# (robots.txt / sitemap.xml) so crawlers and browsers always get the latest.
+aws s3 sync frontend/dist/ s3://${BUCKET}/ --delete \
   --cache-control "public,max-age=31536000,immutable" \
   --exclude "*.html" \
-  --exclude "*.json"
+  --exclude "*.json" \
+  --exclude "robots.txt" \
+  --exclude "sitemap.xml"
 
-aws s3 sync frontend/out/ s3://${BUCKET}/ --delete \
+aws s3 sync frontend/dist/ s3://${BUCKET}/ --delete \
   --cache-control "no-cache" \
+  --exclude "*" \
   --include "*.html" \
-  --include "*.json"
+  --include "*.json" \
+  --include "robots.txt" \
+  --include "sitemap.xml"
 
 if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
   echo "→ Invalidating CloudFront cache (${DIST_ID})..."

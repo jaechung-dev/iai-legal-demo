@@ -50,7 +50,7 @@ export default function ChatPage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
-  const { gate, showGate, dismissGate } = useGuestQuota()
+  const { gate, forceGate, showGate, dismissGate } = useGuestQuota()
   const { token } = useAuth()
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -138,6 +138,7 @@ export default function ChatPage() {
     setMessages([...messages, { role: 'user', content: question }, { role: 'assistant', content: '' }])
 
     let answer = ''; let finalSources: ChatSource[] = []; let completed = false; let streamOk = false
+    let quotaBlocked = false
     const ctrl = new AbortController()
     try {
       const hdrs: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -148,6 +149,16 @@ export default function ChatPage() {
           question, messages: messages.map(m => ({ role: m.role, content: m.content })),
           k: 5, ...(caseId ? { case_id: caseId } : {}),
         }),
+        onopen(res) {
+          // Server-side free-message limit for anonymous users. Surface the
+          // register / log-in gate instead of a generic error.
+          if (res.status === 401 && !token) {
+            quotaBlocked = true
+            ctrl.abort()
+            return Promise.resolve()
+          }
+          return Promise.resolve()
+        },
         onmessage(ev) {
           if (ev.data === '[DONE]') { completed = true; ctrl.abort(); return }
           try {
@@ -164,10 +175,18 @@ export default function ChatPage() {
       })
       streamOk = completed
     } catch (e) {
-      if (completed || (e as Error)?.name === 'AbortError') { streamOk = true }
+      if (quotaBlocked) { /* handled below */ }
+      else if (completed || (e as Error)?.name === 'AbortError') { streamOk = true }
       else setMessages(prev => { const next = [...prev]; next[next.length - 1] = { role: 'assistant', content: 'Something went wrong. Please try again.' }; return next })
     } finally {
       setLoading(false); sendingRef.current = false
+    }
+
+    if (quotaBlocked) {
+      // Roll back the optimistic user + empty-assistant bubbles and open the gate.
+      setMessages(prev => prev.slice(0, -2))
+      forceGate()
+      return
     }
 
     if (streamOk && convId && token && answer) {
